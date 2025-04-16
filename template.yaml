@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda API for portal admin (list users)
+
+Globals:
+  Function:
+    Timeout: 30
+
+Resources:
+  ListUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: list-users
+      PackageType: Image
+      ImageUri: 491696534851.dkr.ecr.us-west-2.amazonaws.com/list-users:latest
+      Role: arn:aws:iam::491696534851:role/lambda_exec_role
+      Events:
+        ListUsersAPI:
+          Type: HttpApi
+          Properties:
+            Path: /list-users
+            Method: GET
