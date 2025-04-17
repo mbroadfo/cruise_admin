@@ -1,0 +1,11 @@
+setup.py
+admin/__init__.py
+admin/auth0_cli.py
+admin/auth0_utils.py
+admin/aws_secrets.py
+portal_admin.egg-info/PKG-INFO
+portal_admin.egg-info/SOURCES.txt
+portal_admin.egg-info/dependency_links.txt
+portal_admin.egg-info/entry_points.txt
+portal_admin.egg-info/requires.txt
+portal_admin.egg-info/top_level.txt

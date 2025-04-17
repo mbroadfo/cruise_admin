@@ -1,6 +1,6 @@
 import os
 
-def dump_python_files(directory, output_file):
+def dump_python_files(directory: str, output_file: str) -> None:
     # Ensure the output directory exists
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 

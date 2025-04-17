@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: portal-admin
+Version: 0.1.0
+Summary: CLI tool for managing Auth0 users in the Lindblad Portal Admin.
+Author: Mike Broadfoot
+Requires-Python: >=3.8
+Requires-Dist: click
+Requires-Dist: requests
+Requires-Dist: boto3
+Dynamic: author
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

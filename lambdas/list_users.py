@@ -1,9 +1,9 @@
-# lambdas/list_users.py
-
 import json
+from typing import Any, Dict
+
 from admin.auth0_utils import get_m2m_token, get_all_users
 
-def lambda_handler(event, context):
+def lambda_handler(event: Dict, context: Any) -> Dict[str, Any]:
     try:
         token = get_m2m_token()
         users = get_all_users(token)

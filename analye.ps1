@@ -1,6 +1,6 @@
 # PowerShell script to analyze Python type hints and UML for lambda_admin_portal
 
-$ProjectPath = "./admin"
+$ProjectPath = "."
 Write-Host "`nScanning Python files in: $ProjectPath"
 
 # 1. Class attributes without type hints

@@ -1,0 +1,2 @@
+[console_scripts]
+portal-admin = admin.auth0_cli:cli
