@@ -1,67 +1,86 @@
-# File: lambdas/admin_api.py
-
 import json
-from admin.auth0_utils import (
-    get_m2m_token,
-    list_users as list_all_users,
-    find_user,
-    create_user,
-    send_password_reset_email,
-    delete_user
-)
+from typing import Any, Dict
+from admin.auth0_utils import get_m2m_token, get_all_users, create_user, send_password_reset_email, delete_user, find_user
 
-def lambda_handler(event, context):
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
-        method = event.get("httpMethod")
-        path = event.get("path")
+        route = event.get("rawPath", "")
+        method = event.get("requestContext", {}).get("http", {}).get("method", "")
 
-        if path == "/users" and method == "GET":
+        if route == "/admin-api/users" and method == "GET":
             return list_users()
-        elif path == "/users" and method == "POST":
-            return invite_user(json.loads(event.get("body", "{}")))
-        elif path == "/users" and method == "DELETE":
-            return delete_user_by_email(json.loads(event.get("body", "{}")))
+        elif route == "/admin-api/users" and method == "POST":
+            return invite_user(event)
+        elif route == "/admin-api/users" and method == "DELETE":
+            return delete_user_by_email(event)
         else:
-            return response(404, {"error": "Not found"})
+            return {
+                "statusCode": 404,
+                "body": json.dumps({"error": "Not Found"})
+            }
 
     except Exception as e:
-        return response(500, {"error": str(e)})
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }
 
-def list_users():
+def list_users() -> Dict[str, Any]:
     token = get_m2m_token()
-    users = list_all_users(token)
-    return response(200, users)
+    users = get_all_users(token)
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(users)
+    }
 
-def invite_user(data):
-    required_fields = ["email", "given_name", "family_name"]
-    if not all(field in data for field in required_fields):
-        return response(400, {"error": "Missing required fields"})
+def invite_user(event: Dict[str, Any]) -> Dict[str, Any]:
+    body = json.loads(event.get("body", "{}"))
+    email = body.get("email")
+    given_name = body.get("given_name")
+    family_name = body.get("family_name")
+
+    if not email or not given_name or not family_name:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Missing required fields"})
+        }
 
     token = get_m2m_token()
-    user = find_user(data["email"])
+    user = find_user(email)
 
-    if not user:
-        user = create_user(data["email"], data["given_name"], data["family_name"], token)
-        send_password_reset_email(data["email"])
-        return response(201, {"message": "User invited", "user_id": user.get("user_id")})
+    if user is None:
+        user = create_user(email, given_name, family_name, token)
+        send_password_reset_email(email)
+        return {
+            "statusCode": 201,
+            "body": json.dumps({"message": "User invited", "user_id": user.get("user_id")})
+        }
     else:
-        return response(200, {"message": "User already exists", "user_id": user.get("user_id")})
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "User already exists", "user_id": user.get("user_id")})
+        }
 
-def delete_user_by_email(data):
-    email = data.get("email")
+def delete_user_by_email(event: Dict[str, Any]) -> Dict[str, Any]:
+    body = json.loads(event.get("body", "{}"))
+    email = body.get("email")
+
     if not email:
-        return response(400, {"error": "Missing email"})
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Email required"})
+        }
 
     user = find_user(email)
-    if not user:
-        return response(404, {"error": "User not found"})
-
-    delete_user(user["user_id"])
-    return response(200, {"message": f"User {email} deleted"})
-
-def response(status_code, body):
-    return {
-        "statusCode": status_code,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body)
-    }
+    if user:
+        delete_user(user.get("user_id"))
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "User deleted"})
+        }
+    else:
+        return {
+            "statusCode": 404,
+            "body": json.dumps({"error": "User not found"})
+        }

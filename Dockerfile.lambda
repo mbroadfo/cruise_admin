@@ -1,0 +1,19 @@
+# Start from the AWS Lambda Python 3.11 base image
+FROM public.ecr.aws/lambda/python:3.11
+
+# Set the working directory
+WORKDIR /var/task
+
+# Copy project files
+COPY lambdas/admin_api.py admin/aws_secrets.py ./
+COPY admin/ ./admin/
+COPY requirements.txt ./
+
+# Install Python dependencies
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+# Optional: help Python find local modules
+ENV PYTHONPATH="/var/task"
+
+# Set the Lambda entry point
+CMD ["admin_api.lambda_handler"]

@@ -18,7 +18,7 @@ Select-String -Path "$ProjectPath\*.py" -Pattern "self\.\w+" | ForEach-Object { 
 
 # 4. Run mypy for type checking
 Write-Host "`n[4] Running mypy..."
-mypy "$ProjectPath" --disallow-untyped-defs --disallow-untyped-calls --ignore-missing-imports
+mypy "$ProjectPath" --disallow-untyped-defs --disallow-untyped-calls --ignore-missing-imports --exclude build/
 
 # 5. Run ruff for linting
 Write-Host "`n[5] Running ruff..."
