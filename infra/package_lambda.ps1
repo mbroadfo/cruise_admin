@@ -1,9 +1,8 @@
 $zipPath = "lambda_deploy_package.zip"
-$repoRoot = Resolve-Path "$PSScriptRoot/.."
 $sourceFiles = @(
-    "$repoRoot/lambdas/admin_api.py",
-    "$repoRoot/admin/aws_secrets.py",
-    "$repoRoot/requirements.txt"
+    "lambdas/admin_api.py",
+    "admin",
+    "requirements.txt"
 )
 
 # Remove existing zip if present
