@@ -80,7 +80,7 @@ resource "aws_apigatewayv2_stage" "prod" {
 # Lambda permission for API Gateway
 #------------------------------
 resource "aws_lambda_permission" "apigw_invoke" {
-  statement_id  = "AllowAPIGatewayInvoke"
+  statement_id  = "AllowAPIGatewayInvoke-${aws_apigatewayv2_api.admin_api.id}"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.admin_api.function_name
   principal     = "apigateway.amazonaws.com"
