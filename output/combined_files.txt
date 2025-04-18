@@ -1,39 +1,8 @@
-# File: .\aws_secrets.py
-
-import boto3
-import json
-import os
-from botocore.exceptions import ClientError
-
-def load_secrets(secret_name: str, region_name: str = "us-west-2") -> dict:
-    """Fetches and parses secret JSON from AWS Secrets Manager."""
-    session = boto3.session.Session()
-    client = session.client(service_name="secretsmanager", region_name=region_name)
-
-    try:
-        response = client.get_secret_value(SecretId=secret_name)
-        secret_str = response.get("SecretString")
-        if not secret_str:
-            raise ValueError(f"Secret {secret_name} has no SecretString")
-        return json.loads(secret_str)
-    except ClientError as e:
-        print(f"❌ Error retrieving secret '{secret_name}': {e}")
-        raise
-
-
-def inject_env_from_secrets(secret_name: str, region_name: str = "us-west-2") -> None:
-    """Sets secret values as environment variables."""
-    secrets = load_secrets(secret_name, region_name)
-    for key, value in secrets.items():
-        if key not in os.environ:  # Don’t override pre-set vars (e.g., CI/CD)
-            os.environ[key] = value
-
-
 # File: .\dump_py.py
 
 import os
 
-def dump_python_files(directory, output_file):
+def dump_python_files(directory: str, output_file: str) -> None:
     # Ensure the output directory exists
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
@@ -71,22 +40,49 @@ dump_python_files(project_directory, output_file)
 print(f"All Python files have been combined into {output_file}")
 
 
+# File: .\setup.py
+
+from setuptools import setup, find_packages
+
+setup(
+    name="portal-admin",
+    version="0.1.0",
+    description="CLI tool for managing Auth0 users in the Lindblad Portal Admin.",
+    author="Mike Broadfoot",
+    packages=find_packages(),
+    install_requires=[
+        "click",
+        "requests",
+        "boto3",
+    ],
+    entry_points={
+        "console_scripts": [
+            "portal-admin=admin.auth0_cli:cli",
+        ],
+    },
+    python_requires=">=3.8",
+    include_package_data=True,
+)
+
+
 # File: .\admin\auth0_cli.py
 
 import click
-from auth0_utils import create_user, send_password_reset_email, get_m2m_token, find_user, list_users, delete_user
+from admin.auth0_utils import create_user, send_password_reset_email, get_m2m_token, find_user, list_users, delete_user
 
 @click.group()
-def cli():
+@click.version_option(version="0.1.0", prog_name="portal-admin")
+def cli() -> None:
     """Admin CLI for Auth0 user management"""
     pass
 
 @cli.command()
-def invite():
+def invite() -> None:
     """Invite a new user by email"""
     email = click.prompt("📧 Email address", type=str)
     given_name = click.prompt("🧑 Given name", type=str)
     family_name = click.prompt("👪 Family name", type=str)
+    
 
     click.echo("\n🔍 Review the information:")
     click.echo(f"   Email       : {email}")
@@ -103,7 +99,7 @@ def invite():
     click.echo("📨 Validating user...")
     user = find_user(email)
     
-    if user == None:
+    if user is None:
         click.echo("📨 Creating user...")
         user = create_user(email, given_name, family_name, token)
     
@@ -116,12 +112,12 @@ def invite():
         click.echo("📨 User Already Exists")
 
 @cli.command()
-def list():
+def list() -> None:
     """List all Auth0 users"""
     list_users()
 
 @cli.command()
-def delete():
+def delete() -> None:
     """Delete a user by email address"""
     email = click.prompt("📧 Email address of user to delete", type=str)
     user = find_user(email)
@@ -147,10 +143,8 @@ import os
 import requests
 import secrets
 import string
-import sys
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, project_root)
-from aws_secrets import inject_env_from_secrets
+from typing import List
+from admin.aws_secrets import inject_env_from_secrets
 
 # Inject secrets from AWS Secrets Manager
 inject_env_from_secrets("cruise-finder-secrets")
@@ -163,7 +157,7 @@ AUTH0_CONNECTION = os.getenv("AUTH0_CONNECTION", "Username-Password-Authenticati
 CLOUD_FRONT_URI = os.getenv("CLOUD_FRONT_URI")
 
 
-def get_m2m_token():
+def get_m2m_token() -> str:
     url = f"https://{AUTH0_DOMAIN}/oauth/token"
     payload = {
         "client_id": AUTH0_CLIENT_ID,
@@ -175,11 +169,11 @@ def get_m2m_token():
     resp.raise_for_status()
     return resp.json()["access_token"]
 
-def generate_temp_password(length=16):
+def generate_temp_password(length:int=16) -> str:
     chars = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
     return ''.join(secrets.choice(chars) for _ in range(length))
 
-def create_user(email, given_name, family_name, token):
+def create_user(email: str, given_name: str, family_name: str, token: str) -> dict:
     url = f"https://{AUTH0_DOMAIN}/api/v2/users"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -200,7 +194,7 @@ def create_user(email, given_name, family_name, token):
         resp.raise_for_status()
     return resp.json()
 
-def send_password_reset_email(email, token=None):
+def send_password_reset_email(email: str, token: str | None = None) -> None:
     url = f"https://{AUTH0_DOMAIN}/dbconnections/change_password"
     payload = {
         "client_id": AUTH0_WEB_CLIENT_ID,
@@ -226,7 +220,7 @@ def send_password_reset_email(email, token=None):
         resp.raise_for_status()
     print("📬 Password reset email sent by Auth0!")
 
-def find_user(email):
+def find_user(email: str) -> dict | None:
     """List all users in the Auth0 tenant."""
     token = get_m2m_token()
     url = f"https://{AUTH0_DOMAIN}/api/v2/users?q={email}"
@@ -240,7 +234,7 @@ def find_user(email):
     
     return users[0] if users else None
     
-def list_users():
+def list_users() -> None:
     """List all users in the Auth0 tenant."""
     token = get_m2m_token()
     url = f"https://{AUTH0_DOMAIN}/api/v2/users"
@@ -271,9 +265,9 @@ def list_users():
     print(f"\n👥 Found {len(users)} users:\n")
     for user in users:
         print(f"- {user.get('email')} ({user.get('user_id')})")
-    print(f"")
+    print("")
 
-def delete_user(user_id):
+def delete_user(user_id: str | None) -> None:
     """Delete a user from Auth0 by user ID."""
     token = get_m2m_token()
     url = f"https://{AUTH0_DOMAIN}/api/v2/users/{user_id}"
@@ -289,15 +283,834 @@ def delete_user(user_id):
         print(resp.status_code, resp.text)
         resp.raise_for_status()
 
+def get_all_users(token: str) -> List:
+    """Returns a list of all Auth0 users."""
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    users = []
+    page = 0
+    per_page = 50
+
+    while True:
+        params = {
+            "page": page,
+            "per_page": per_page
+        }
+
+        resp = requests.get(url, headers=headers, params=params)
+        resp.raise_for_status()
+        batch = resp.json()
+
+        if not batch:
+            break
+
+        users.extend(batch)
+        page += 1
+
+    return users
+
+
+# File: .\admin\aws_secrets.py
+
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+import boto3
+import json
+from botocore.exceptions import ClientError
+
+def load_secrets(secret_name: str, region_name: str = "us-west-2") -> dict:
+    """Fetches and parses secret JSON from AWS Secrets Manager."""
+    session = boto3.session.Session()
+    client = session.client(service_name="secretsmanager", region_name=region_name)
+
+    try:
+        response = client.get_secret_value(SecretId=secret_name)
+        secret_str = response.get("SecretString")
+        if not secret_str:
+            raise ValueError(f"Secret {secret_name} has no SecretString")
+        return json.loads(secret_str)
+    except ClientError as e:
+        print(f"❌ Error retrieving secret '{secret_name}': {e}")
+        raise
+
+
+def inject_env_from_secrets(secret_name: str, region_name: str = "us-west-2") -> None:
+    """Sets secret values as environment variables."""
+    secrets = load_secrets(secret_name, region_name)
+    for key, value in secrets.items():
+        if key not in os.environ:  # Don’t override pre-set vars (e.g., CI/CD)
+            os.environ[key] = value
+
+
+# File: .\admin\__init__.py
+
+
+
+# File: .\build\lib\admin\auth0_cli.py
+
+import click
+from admin.auth0_utils import create_user, send_password_reset_email, get_m2m_token, find_user, list_users, delete_user
+
+@click.group()
+@click.version_option(version="0.1.0", prog_name="portal-admin")
+def cli() -> None:
+    """Admin CLI for Auth0 user management"""
+    pass
+
+@cli.command()
+def invite() -> None:
+    """Invite a new user by email"""
+    email = click.prompt("📧 Email address", type=str)
+    given_name = click.prompt("🧑 Given name", type=str)
+    family_name = click.prompt("👪 Family name", type=str)
+    
+
+    click.echo("\n🔍 Review the information:")
+    click.echo(f"   Email       : {email}")
+    click.echo(f"   Given name  : {given_name}")
+    click.echo(f"   Family name : {family_name}")
+
+    if not click.confirm("\n✅ Proceed with invitation?"):
+        click.echo("❌ Cancelled.")
+        return
+
+    click.echo("\n🔐 Requesting token...")
+    token = get_m2m_token()
+
+    click.echo("📨 Validating user...")
+    user = find_user(email)
+    
+    if user is None:
+        click.echo("📨 Creating user...")
+        user = create_user(email, given_name, family_name, token)
+    
+        click.echo("📨 Sending Invitation...")
+        send_password_reset_email(email)
+
+        click.echo("\n✅ Invitation sent successfully!")
+        click.echo(f"   User ID: {user.get('user_id')}")
+    else:
+        click.echo("📨 User Already Exists")
+
+@cli.command()
+def list() -> None:
+    """List all Auth0 users"""
+    list_users()
+
+@cli.command()
+def delete() -> None:
+    """Delete a user by email address"""
+    email = click.prompt("📧 Email address of user to delete", type=str)
+    user = find_user(email)
+
+    if not user:
+        click.echo("❌ User not found.")
+        return
+
+    user_id = user.get("user_id")
+    click.echo(f"\n⚠️ About to delete user: {email} ({user_id})")
+    if click.confirm("Are you sure you want to proceed?"):
+        delete_user(user_id)
+    else:
+        click.echo("❌ Deletion cancelled.")
+
+if __name__ == "__main__":
+    cli()
+
+
+# File: .\build\lib\admin\auth0_utils.py
+
+import os
+import requests
+import secrets
+import string
+from typing import List
+from admin.aws_secrets import inject_env_from_secrets
+
+# Inject secrets from AWS Secrets Manager
+inject_env_from_secrets("cruise-finder-secrets")
+
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
+AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
+AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET")
+AUTH0_WEB_CLIENT_ID = os.getenv("AUTH0_WEB_CLIENT_ID")
+AUTH0_CONNECTION = os.getenv("AUTH0_CONNECTION", "Username-Password-Authentication")
+CLOUD_FRONT_URI = os.getenv("CLOUD_FRONT_URI")
+
+
+def get_m2m_token() -> str:
+    url = f"https://{AUTH0_DOMAIN}/oauth/token"
+    payload = {
+        "client_id": AUTH0_CLIENT_ID,
+        "client_secret": AUTH0_CLIENT_SECRET,
+        "audience": f"https://{AUTH0_DOMAIN}/api/v2/",
+        "grant_type": "client_credentials",
+    }
+    resp = requests.post(url, json=payload)
+    resp.raise_for_status()
+    return resp.json()["access_token"]
+
+def generate_temp_password(length:int=16) -> str:
+    chars = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+def create_user(email: str, given_name: str, family_name: str, token: str) -> dict:
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "email": email,
+        "given_name": given_name,
+        "family_name": family_name,
+        "connection": AUTH0_CONNECTION,
+        "email_verified": True,
+        "password": generate_temp_password()
+    }
+    resp = requests.post(url, json=payload, headers=headers)
+    if not resp.ok:
+        print("❌ Error response from Auth0:")
+        print(resp.status_code, resp.text)
+        resp.raise_for_status()
+    return resp.json()
+
+def send_password_reset_email(email: str, token: str | None = None) -> None:
+    url = f"https://{AUTH0_DOMAIN}/dbconnections/change_password"
+    payload = {
+        "client_id": AUTH0_WEB_CLIENT_ID,
+        "email": email,
+        "connection": AUTH0_CONNECTION,
+        "redirect_uri": os.getenv("REDIRECT_URI")
+    }
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    print("\n📦 Sending password reset email with:")
+    print(f"🔗 Endpoint : {url}")
+    print(f"📧 Email    : {email}")
+    print(f"🔌 Client ID: {AUTH0_CLIENT_ID}")
+    print(f"🔗 Connection: {AUTH0_CONNECTION}")
+
+    resp = requests.post(url, json=payload, headers=headers)
+
+    if not resp.ok:
+        print("❌ Password reset request failed:")
+        print(resp.status_code, resp.text)
+        resp.raise_for_status()
+    print("📬 Password reset email sent by Auth0!")
+
+def find_user(email: str) -> dict | None:
+    """List all users in the Auth0 tenant."""
+    token = get_m2m_token()
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users?q={email}"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    resp = requests.get(url, headers=headers)
+    resp.raise_for_status()
+    users = resp.json()
+    
+    return users[0] if users else None
+    
+def list_users() -> None:
+    """List all users in the Auth0 tenant."""
+    token = get_m2m_token()
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    users = []
+    page = 0
+    per_page = 50  # max allowed by Auth0 is 100
+
+    while True:
+        params = {
+            "page": page,
+            "per_page": per_page
+        }
+
+        resp = requests.get(url, headers=headers, params=params)
+        resp.raise_for_status()
+        batch = resp.json()
+
+        if not batch:
+            break  # No more users
+
+        users.extend(batch)
+        page += 1
+
+    print(f"\n👥 Found {len(users)} users:\n")
+    for user in users:
+        print(f"- {user.get('email')} ({user.get('user_id')})")
+    print("")
+
+def delete_user(user_id: str | None) -> None:
+    """Delete a user from Auth0 by user ID."""
+    token = get_m2m_token()
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users/{user_id}"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    resp = requests.delete(url, headers=headers)
+    if resp.status_code == 204:
+        print(f"🗑️ User {user_id} deleted successfully.")
+    else:
+        print("❌ Failed to delete user:")
+        print(resp.status_code, resp.text)
+        resp.raise_for_status()
+
+def get_all_users(token: str) -> List:
+    """Returns a list of all Auth0 users."""
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    users = []
+    page = 0
+    per_page = 50
+
+    while True:
+        params = {
+            "page": page,
+            "per_page": per_page
+        }
+
+        resp = requests.get(url, headers=headers, params=params)
+        resp.raise_for_status()
+        batch = resp.json()
+
+        if not batch:
+            break
+
+        users.extend(batch)
+        page += 1
+
+    return users
+
+
+# File: .\build\lib\admin\aws_secrets.py
+
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+import boto3
+import json
+from botocore.exceptions import ClientError
+
+def load_secrets(secret_name: str, region_name: str = "us-west-2") -> dict:
+    """Fetches and parses secret JSON from AWS Secrets Manager."""
+    session = boto3.session.Session()
+    client = session.client(service_name="secretsmanager", region_name=region_name)
+
+    try:
+        response = client.get_secret_value(SecretId=secret_name)
+        secret_str = response.get("SecretString")
+        if not secret_str:
+            raise ValueError(f"Secret {secret_name} has no SecretString")
+        return json.loads(secret_str)
+    except ClientError as e:
+        print(f"❌ Error retrieving secret '{secret_name}': {e}")
+        raise
+
+
+def inject_env_from_secrets(secret_name: str, region_name: str = "us-west-2") -> None:
+    """Sets secret values as environment variables."""
+    secrets = load_secrets(secret_name, region_name)
+    for key, value in secrets.items():
+        if key not in os.environ:  # Don’t override pre-set vars (e.g., CI/CD)
+            os.environ[key] = value
+
+
+# File: .\build\lib\admin\__init__.py
+
+
+
+# File: .\infra\build_lambda\admin_api.py
+
+import json
+from typing import Any, Dict
+from admin.auth0_utils import get_m2m_token, get_all_users, create_user, send_password_reset_email, delete_user, find_user
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    try:
+        route = event.get("rawPath", "")
+        method = event.get("requestContext", {}).get("http", {}).get("method", "")
+
+        if route == "/admin-api/users" and method == "GET":
+            return list_users()
+        elif route == "/admin-api/users" and method == "POST":
+            return invite_user(event)
+        elif route == "/admin-api/users" and method == "DELETE":
+            return delete_user_by_email(event)
+        else:
+            return {
+                "statusCode": 404,
+                "body": json.dumps({"error": "Not Found"})
+            }
+
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }
+
+def list_users() -> Dict[str, Any]:
+    token = get_m2m_token()
+    users = get_all_users(token)
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(users)
+    }
+
+def invite_user(event: Dict[str, Any]) -> Dict[str, Any]:
+    body = json.loads(event.get("body", "{}"))
+    email = body.get("email")
+    given_name = body.get("given_name")
+    family_name = body.get("family_name")
+
+    if not email or not given_name or not family_name:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Missing required fields"})
+        }
+
+    token = get_m2m_token()
+    user = find_user(email)
+
+    if user is None:
+        user = create_user(email, given_name, family_name, token)
+        send_password_reset_email(email)
+        return {
+            "statusCode": 201,
+            "body": json.dumps({"message": "User invited", "user_id": user.get("user_id")})
+        }
+    else:
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "User already exists", "user_id": user.get("user_id")})
+        }
+
+def delete_user_by_email(event: Dict[str, Any]) -> Dict[str, Any]:
+    body = json.loads(event.get("body", "{}"))
+    email = body.get("email")
+
+    if not email:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Email required"})
+        }
+
+    user = find_user(email)
+    if user:
+        delete_user(user.get("user_id"))
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "User deleted"})
+        }
+    else:
+        return {
+            "statusCode": 404,
+            "body": json.dumps({"error": "User not found"})
+        }
+
+
+# File: .\infra\build_lambda\admin\auth0_cli.py
+
+import click
+from admin.auth0_utils import create_user, send_password_reset_email, get_m2m_token, find_user, list_users, delete_user
+
+@click.group()
+@click.version_option(version="0.1.0", prog_name="portal-admin")
+def cli() -> None:
+    """Admin CLI for Auth0 user management"""
+    pass
+
+@cli.command()
+def invite() -> None:
+    """Invite a new user by email"""
+    email = click.prompt("📧 Email address", type=str)
+    given_name = click.prompt("🧑 Given name", type=str)
+    family_name = click.prompt("👪 Family name", type=str)
+    
+
+    click.echo("\n🔍 Review the information:")
+    click.echo(f"   Email       : {email}")
+    click.echo(f"   Given name  : {given_name}")
+    click.echo(f"   Family name : {family_name}")
+
+    if not click.confirm("\n✅ Proceed with invitation?"):
+        click.echo("❌ Cancelled.")
+        return
+
+    click.echo("\n🔐 Requesting token...")
+    token = get_m2m_token()
+
+    click.echo("📨 Validating user...")
+    user = find_user(email)
+    
+    if user is None:
+        click.echo("📨 Creating user...")
+        user = create_user(email, given_name, family_name, token)
+    
+        click.echo("📨 Sending Invitation...")
+        send_password_reset_email(email)
+
+        click.echo("\n✅ Invitation sent successfully!")
+        click.echo(f"   User ID: {user.get('user_id')}")
+    else:
+        click.echo("📨 User Already Exists")
+
+@cli.command()
+def list() -> None:
+    """List all Auth0 users"""
+    list_users()
+
+@cli.command()
+def delete() -> None:
+    """Delete a user by email address"""
+    email = click.prompt("📧 Email address of user to delete", type=str)
+    user = find_user(email)
+
+    if not user:
+        click.echo("❌ User not found.")
+        return
+
+    user_id = user.get("user_id")
+    click.echo(f"\n⚠️ About to delete user: {email} ({user_id})")
+    if click.confirm("Are you sure you want to proceed?"):
+        delete_user(user_id)
+    else:
+        click.echo("❌ Deletion cancelled.")
+
+if __name__ == "__main__":
+    cli()
+
+
+# File: .\infra\build_lambda\admin\auth0_utils.py
+
+import os
+import requests
+import secrets
+import string
+from typing import List
+from admin.aws_secrets import inject_env_from_secrets
+
+# Inject secrets from AWS Secrets Manager
+inject_env_from_secrets("cruise-finder-secrets")
+
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
+AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
+AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET")
+AUTH0_WEB_CLIENT_ID = os.getenv("AUTH0_WEB_CLIENT_ID")
+AUTH0_CONNECTION = os.getenv("AUTH0_CONNECTION", "Username-Password-Authentication")
+CLOUD_FRONT_URI = os.getenv("CLOUD_FRONT_URI")
+
+
+def get_m2m_token() -> str:
+    url = f"https://{AUTH0_DOMAIN}/oauth/token"
+    payload = {
+        "client_id": AUTH0_CLIENT_ID,
+        "client_secret": AUTH0_CLIENT_SECRET,
+        "audience": f"https://{AUTH0_DOMAIN}/api/v2/",
+        "grant_type": "client_credentials",
+    }
+    resp = requests.post(url, json=payload)
+    resp.raise_for_status()
+    return resp.json()["access_token"]
+
+def generate_temp_password(length:int=16) -> str:
+    chars = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+def create_user(email: str, given_name: str, family_name: str, token: str) -> dict:
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "email": email,
+        "given_name": given_name,
+        "family_name": family_name,
+        "connection": AUTH0_CONNECTION,
+        "email_verified": True,
+        "password": generate_temp_password()
+    }
+    resp = requests.post(url, json=payload, headers=headers)
+    if not resp.ok:
+        print("❌ Error response from Auth0:")
+        print(resp.status_code, resp.text)
+        resp.raise_for_status()
+    return resp.json()
+
+def send_password_reset_email(email: str, token: str | None = None) -> None:
+    url = f"https://{AUTH0_DOMAIN}/dbconnections/change_password"
+    payload = {
+        "client_id": AUTH0_WEB_CLIENT_ID,
+        "email": email,
+        "connection": AUTH0_CONNECTION,
+        "redirect_uri": os.getenv("REDIRECT_URI")
+    }
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    print("\n📦 Sending password reset email with:")
+    print(f"🔗 Endpoint : {url}")
+    print(f"📧 Email    : {email}")
+    print(f"🔌 Client ID: {AUTH0_CLIENT_ID}")
+    print(f"🔗 Connection: {AUTH0_CONNECTION}")
+
+    resp = requests.post(url, json=payload, headers=headers)
+
+    if not resp.ok:
+        print("❌ Password reset request failed:")
+        print(resp.status_code, resp.text)
+        resp.raise_for_status()
+    print("📬 Password reset email sent by Auth0!")
+
+def find_user(email: str) -> dict | None:
+    """List all users in the Auth0 tenant."""
+    token = get_m2m_token()
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users?q={email}"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    
+    resp = requests.get(url, headers=headers)
+    resp.raise_for_status()
+    users = resp.json()
+    
+    return users[0] if users else None
+    
+def list_users() -> None:
+    """List all users in the Auth0 tenant."""
+    token = get_m2m_token()
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    users = []
+    page = 0
+    per_page = 50  # max allowed by Auth0 is 100
+
+    while True:
+        params = {
+            "page": page,
+            "per_page": per_page
+        }
+
+        resp = requests.get(url, headers=headers, params=params)
+        resp.raise_for_status()
+        batch = resp.json()
+
+        if not batch:
+            break  # No more users
+
+        users.extend(batch)
+        page += 1
+
+    print(f"\n👥 Found {len(users)} users:\n")
+    for user in users:
+        print(f"- {user.get('email')} ({user.get('user_id')})")
+    print("")
+
+def delete_user(user_id: str | None) -> None:
+    """Delete a user from Auth0 by user ID."""
+    token = get_m2m_token()
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users/{user_id}"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    resp = requests.delete(url, headers=headers)
+    if resp.status_code == 204:
+        print(f"🗑️ User {user_id} deleted successfully.")
+    else:
+        print("❌ Failed to delete user:")
+        print(resp.status_code, resp.text)
+        resp.raise_for_status()
+
+def get_all_users(token: str) -> List:
+    """Returns a list of all Auth0 users."""
+    url = f"https://{AUTH0_DOMAIN}/api/v2/users"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    users = []
+    page = 0
+    per_page = 50
+
+    while True:
+        params = {
+            "page": page,
+            "per_page": per_page
+        }
+
+        resp = requests.get(url, headers=headers, params=params)
+        resp.raise_for_status()
+        batch = resp.json()
+
+        if not batch:
+            break
+
+        users.extend(batch)
+        page += 1
+
+    return users
+
+
+# File: .\infra\build_lambda\admin\aws_secrets.py
+
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+import boto3
+import json
+from botocore.exceptions import ClientError
+
+def load_secrets(secret_name: str, region_name: str = "us-west-2") -> dict:
+    """Fetches and parses secret JSON from AWS Secrets Manager."""
+    session = boto3.session.Session()
+    client = session.client(service_name="secretsmanager", region_name=region_name)
+
+    try:
+        response = client.get_secret_value(SecretId=secret_name)
+        secret_str = response.get("SecretString")
+        if not secret_str:
+            raise ValueError(f"Secret {secret_name} has no SecretString")
+        return json.loads(secret_str)
+    except ClientError as e:
+        print(f"❌ Error retrieving secret '{secret_name}': {e}")
+        raise
+
+
+def inject_env_from_secrets(secret_name: str, region_name: str = "us-west-2") -> None:
+    """Sets secret values as environment variables."""
+    secrets = load_secrets(secret_name, region_name)
+    for key, value in secrets.items():
+        if key not in os.environ:  # Don’t override pre-set vars (e.g., CI/CD)
+            os.environ[key] = value
+
+
+# File: .\infra\build_lambda\admin\__init__.py
+
+
+
+# File: .\lambdas\admin_api.py
+
+import json
+from typing import Any, Dict
+from admin.auth0_utils import get_m2m_token, get_all_users, create_user, send_password_reset_email, delete_user, find_user
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    try:
+        route = event.get("rawPath", "")
+        method = event.get("requestContext", {}).get("http", {}).get("method", "")
+
+        if route == "/admin-api/users" and method == "GET":
+            return list_users()
+        elif route == "/admin-api/users" and method == "POST":
+            return invite_user(event)
+        elif route == "/admin-api/users" and method == "DELETE":
+            return delete_user_by_email(event)
+        else:
+            return {
+                "statusCode": 404,
+                "body": json.dumps({"error": "Not Found"})
+            }
+
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }
+
+def list_users() -> Dict[str, Any]:
+    token = get_m2m_token()
+    users = get_all_users(token)
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(users)
+    }
+
+def invite_user(event: Dict[str, Any]) -> Dict[str, Any]:
+    body = json.loads(event.get("body", "{}"))
+    email = body.get("email")
+    given_name = body.get("given_name")
+    family_name = body.get("family_name")
+
+    if not email or not given_name or not family_name:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Missing required fields"})
+        }
+
+    token = get_m2m_token()
+    user = find_user(email)
+
+    if user is None:
+        user = create_user(email, given_name, family_name, token)
+        send_password_reset_email(email)
+        return {
+            "statusCode": 201,
+            "body": json.dumps({"message": "User invited", "user_id": user.get("user_id")})
+        }
+    else:
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "User already exists", "user_id": user.get("user_id")})
+        }
+
+def delete_user_by_email(event: Dict[str, Any]) -> Dict[str, Any]:
+    body = json.loads(event.get("body", "{}"))
+    email = body.get("email")
+
+    if not email:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Email required"})
+        }
+
+    user = find_user(email)
+    if user:
+        delete_user(user.get("user_id"))
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "User deleted"})
+        }
+    else:
+        return {
+            "statusCode": 404,
+            "body": json.dumps({"error": "User not found"})
+        }
+
 
 # File: .\lambdas\list_users.py
 
-# lambdas/list_users.py
-
 import json
+from typing import Any, Dict
+
 from admin.auth0_utils import get_m2m_token, get_all_users
 
-def lambda_handler(event, context):
+def lambda_handler(event: Dict, context: Any) -> Dict[str, Any]:
     try:
         token = get_m2m_token()
         users = get_all_users(token)

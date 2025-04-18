@@ -1,21 +1,24 @@
 $zipPath = "lambda_deploy_package.zip"
-$buildDir = "build_lambda"
-
-# Clean build directory
-if (Test-Path $buildDir) { Remove-Item $buildDir -Recurse -Force }
-New-Item -ItemType Directory -Path $buildDir | Out-Null
-
-# Copy source files
-Copy-Item ../lambdas/admin_api.py $buildDir/
-Copy-Item ../requirements.txt $buildDir/
-Copy-Item ../admin -Recurse -Destination $buildDir/admin
 
 # Remove existing zip if present
 if (Test-Path $zipPath) {
     Remove-Item $zipPath
 }
 
-# Create the zip file
-Compress-Archive -Path "$buildDir/*" -DestinationPath $zipPath
+# Recreate clean structure in temp
+$tempDir = "temp_lambda_package"
+Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path $tempDir | Out-Null
+
+# Copy files
+Copy-Item ./admin -Destination $tempDir/admin -Recurse
+Copy-Item ./lambdas/admin_api.py -Destination $tempDir
+Copy-Item ./requirements.txt -Destination $tempDir
+
+# Zip from root of temp
+Compress-Archive -Path "$tempDir/*" -DestinationPath $zipPath
+
+# Clean up
+Remove-Item -Recurse -Force $tempDir
 
 Write-Host "✅ Lambda deployment package created: $zipPath"
