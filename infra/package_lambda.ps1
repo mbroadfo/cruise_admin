@@ -8,14 +8,20 @@ if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
 # Create temp directory
 New-Item -ItemType Directory -Path $tempDir | Out-Null
 
-# Install Python dependencies
-pip install requests -t $tempDir
+# ✅ Install dependencies into the temp directory
+pip install -r requirements.txt -t $tempDir
 
-# Copy Python source files
+# Copy lambda code
 Copy-Item -Path "./lambdas/admin_api.py" -Destination $tempDir
 Copy-Item -Path "./admin" -Recurse -Destination "$tempDir/admin"
 
-# Create the zip package
-Compress-Archive -Path "$tempDir/*" -DestinationPath $zipPath
+# ✅ Zip the entire contents (recursively)
+Compress-Archive -Path "$tempDir\*" -DestinationPath $zipPath
 
 Write-Host "✅ Lambda deployment package created: $zipPath"
+
+# 🕵️ Expand the zip and list its contents for verification
+$checkPath = "check_zip"
+if (Test-Path $checkPath) { Remove-Item $checkPath -Recurse -Force }
+Expand-Archive -Path $zipPath -DestinationPath $checkPath
+Get-ChildItem $checkPath

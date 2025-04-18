@@ -45,6 +45,10 @@ resource "aws_lambda_function" "admin_api" {
 resource "aws_apigatewayv2_api" "admin_api" {
   name          = "admin-api"
   protocol_type = "HTTP"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 #------------------------------
