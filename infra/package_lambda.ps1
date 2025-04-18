@@ -1,24 +1,18 @@
 $zipPath = "lambda_deploy_package.zip"
+$tempDir = "lambda_build"
 
-# Remove existing zip if present
-if (Test-Path $zipPath) {
-    Remove-Item $zipPath
-}
+# Clean up old files
+Remove-Item -Recurse -Force $tempDir, $zipPath -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path $tempDir
 
-# Recreate clean structure in temp
-$tempDir = "temp_lambda_package"
-Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $tempDir | Out-Null
+# Install dependencies
+pip install -r requirements.txt -t $tempDir
 
-# Copy files
-Copy-Item ./admin -Destination $tempDir/admin -Recurse
-Copy-Item ./lambdas/admin_api.py -Destination $tempDir
-Copy-Item ./requirements.txt -Destination $tempDir
+# Copy source files
+Copy-Item -Path "lambdas/admin_api.py" -Destination $tempDir
+Copy-Item -Recurse -Path "admin" -Destination "$tempDir/admin"
 
-# Zip from root of temp
+# Create ZIP
 Compress-Archive -Path "$tempDir/*" -DestinationPath $zipPath
-
-# Clean up
-Remove-Item -Recurse -Force $tempDir
 
 Write-Host "✅ Lambda deployment package created: $zipPath"
