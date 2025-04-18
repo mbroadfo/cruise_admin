@@ -38,3 +38,51 @@ resource "aws_lambda_function" "admin_api" {
   filename      = "lambda_deploy_package.zip"
   source_code_hash = filebase64sha256("lambda_deploy_package.zip")
 }
+
+#------------------------------
+# Create HTTP API Gateway
+#------------------------------
+resource "aws_apigatewayv2_api" "admin_api" {
+  name          = "admin-api"
+  protocol_type = "HTTP"
+}
+
+#------------------------------
+# Create Lambda integration
+#------------------------------
+resource "aws_apigatewayv2_integration" "admin_api" {
+  api_id                 = aws_apigatewayv2_api.admin_api.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.admin_api.invoke_arn
+  integration_method     = "POST"
+  payload_format_version = "2.0"
+}
+
+#------------------------------
+# Define route for GET /admin-api/users
+#------------------------------
+resource "aws_apigatewayv2_route" "admin_api_route" {
+  api_id    = aws_apigatewayv2_api.admin_api.id
+  route_key = "GET /admin-api/users"
+  target    = "integrations/${aws_apigatewayv2_integration.admin_api.id}"
+}
+
+#------------------------------
+# Deploy the API
+#------------------------------
+resource "aws_apigatewayv2_stage" "prod" {
+  api_id      = aws_apigatewayv2_api.admin_api.id
+  name        = "prod"
+  auto_deploy = true
+}
+
+#------------------------------
+# Lambda permission for API Gateway
+#------------------------------
+resource "aws_lambda_permission" "apigw_invoke" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.admin_api.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.admin_api.execution_arn}/*/*"
+}
