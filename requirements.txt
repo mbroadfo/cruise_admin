@@ -3,4 +3,5 @@ uvicorn
 requests
 boto3
 python-multipart
-pydantic
+pydantic[email]
+email-validator  
