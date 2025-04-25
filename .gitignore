@@ -16,10 +16,6 @@ dist/
 build/
 pip-wheel-metadata/
 
-# Lambda deployment packages
-lambda_deploy_package.zip
-*.tar.gz
-
 # Terraform files
 .terraform/
 terraform.tfstate

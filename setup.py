@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="portal-admin",
+    name="cruise-admin",
     version="0.1.0",
-    description="CLI tool for managing Auth0 users in the Lindblad Portal Admin.",
+    description="CLI tool for managing Auth0 users in the Lindblad Cruise Viewer.",
     author="Mike Broadfoot",
     packages=find_packages(),
     install_requires=[
@@ -13,7 +13,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "portal-admin=admin.auth0_cli:cli",
+            "cruise-admin=admin.auth0_cli:cli",
         ],
     },
     python_requires=">=3.8",
