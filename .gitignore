@@ -44,3 +44,5 @@ desktop.ini
 
 # Log files
 *.log
+
+output/
