@@ -27,8 +27,15 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
 
-      - name: Package Lambda
-        run: pwsh ./infra/package_lambda.ps1
+      - name: Log in to Amazon ECR
+        run: |
+          aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 491696534851.dkr.ecr.us-west-2.amazonaws.com
+      
+      - name: Build and push Docker image
+        run: |
+          docker build --platform linux/amd64 -t cruise-admin-api:latest .
+          docker tag cruise-admin-api:latest 491696534851.dkr.ecr.us-west-2.amazonaws.com/cruise-admin-api:latest
+          docker push 491696534851.dkr.ecr.us-west-2.amazonaws.com/cruise-admin-api:latest
 
       - name: Terraform Init
         working-directory: ./infra
