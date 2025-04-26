@@ -1,15 +1,18 @@
-FROM python:3.11-slim
+FROM public.ecr.aws/lambda/python:3.11
 
-WORKDIR /app
+# Set the working directory
+WORKDIR /var/task
 
-RUN apt-get update && apt-get upgrade -y && apt-get clean
+# Install OS packages
+RUN yum install -y gcc && yum clean all
 
+# Copy requirements and install
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
+# Copy your FastAPI app code
 COPY app/ ./app/
 COPY admin/ ./admin/
 
-EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Tell Lambda which handler to call (we'll explain below)
+CMD ["app.main.handler"]

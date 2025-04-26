@@ -4,6 +4,7 @@ from app.models import InviteUserRequest, DeleteUserRequest, StandardResponse
 from app.shutdown import monitor_idle_shutdown, update_last_activity_middleware
 from admin.auth0_utils import get_m2m_token, get_all_users, create_user, send_password_reset_email, delete_user, find_user
 import threading
+from mangum import Mangum  # 👈 this bridges FastAPI to AWS Lambda
 
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
@@ -41,3 +42,8 @@ async def delete_user_api(payload: DeleteUserRequest):
 
     delete_user(user.get("user_id"))
     return StandardResponse(success=True, message="User deleted successfully")
+
+handler = Mangum(app)
+
+def lambda_handler(event, context):
+    return handler(event, context)

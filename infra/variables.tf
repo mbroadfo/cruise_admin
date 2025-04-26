@@ -1,0 +1,23 @@
+variable "aws_region" {
+  description = "AWS region to deploy to"
+  type        = string
+  default     = "us-west-2"
+}
+
+variable "app_name" {
+  description = "Name for app resources"
+  type        = string
+  default     = "cruise-admin-api"
+}
+
+variable "ecr_repo_name" {
+  description = "ECR Repository name"
+  type        = string
+  default     = "cruise-admin-api"
+}
+
+variable "image_tag" {
+  description = "Image tag to deploy"
+  type        = string
+  default     = "latest"
+}
