@@ -21,3 +21,9 @@ variable "image_tag" {
   type        = string
   default     = "latest"
 }
+
+variable "auth0_domain" {
+  description = "Auth0 Domain (without https://)"
+  type        = string
+  default     = "dev-jdsnf3lqod8nxlnv.us.auth0.com"
+}
