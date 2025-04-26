@@ -133,6 +133,15 @@ resource "aws_apigatewayv2_route" "default" {
   authorizer_id      = aws_apigatewayv2_authorizer.jwt_auth.id
 }
 
+resource "aws_apigatewayv2_route" "options" {
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "OPTIONS /admin-api/{proxy+}"  # Allow CORS preflight
+
+  target = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+
+  authorization_type = "NONE"  # No auth needed for OPTIONS!
+}
+
 resource "aws_apigatewayv2_stage" "prod" {
   api_id      = aws_apigatewayv2_api.api.id
   name        = "$default"

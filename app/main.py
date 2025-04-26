@@ -68,7 +68,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return {
             "statusCode": 200,
             "headers": {
-                "Access-Control-Allow-Origin": "*",  # or your specific origins
+                "Access-Control-Allow-Origin": event["headers"].get("origin", "https://da389rkfiajdk.cloudfront.net"),
                 "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
                 "Access-Control-Allow-Headers": "Authorization, Content-Type",
             },
