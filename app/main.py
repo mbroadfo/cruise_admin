@@ -1,10 +1,14 @@
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, Response, HTTPException
 from app.models import InviteUserRequest, DeleteUserRequest, StandardResponse
 from app.shutdown import monitor_idle_shutdown, update_last_activity_middleware
 from admin.auth0_utils import get_m2m_token, get_all_users, create_user, send_password_reset_email, delete_user, find_user
 import threading
 from mangum import Mangum  # 👈 this bridges FastAPI to AWS Lambda
+from typing import Any, Dict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Callable
+
 
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
@@ -13,17 +17,17 @@ threading.Thread(target=monitor_idle_shutdown, daemon=True).start()
 
 # Middleware to track last request time
 @app.middleware("http")
-async def last_activity_tracker(request: Request, call_next):
+async def last_activity_tracker(request: Request, call_next: Callable) -> Response:
     return await update_last_activity_middleware(request, call_next)
 
 @app.get("/admin-api/users", response_model=StandardResponse)
-async def list_users_api():
+async def list_users_api() -> StandardResponse:
     token = get_m2m_token()
     users = get_all_users(token)
     return StandardResponse(success=True, message="Users listed successfully", data={"users": users})
 
 @app.post("/admin-api/users", response_model=StandardResponse)
-async def invite_user_api(payload: InviteUserRequest):
+async def invite_user_api(payload: InviteUserRequest) -> StandardResponse:
     token = get_m2m_token()
     user = find_user(payload.email)
 
@@ -35,7 +39,7 @@ async def invite_user_api(payload: InviteUserRequest):
     return StandardResponse(success=True, message="User invited successfully", data={"user_id": user.get("user_id")})
 
 @app.delete("/admin-api/users", response_model=StandardResponse)
-async def delete_user_api(payload: DeleteUserRequest):
+async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
     user = find_user(payload.email)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -45,5 +49,5 @@ async def delete_user_api(payload: DeleteUserRequest):
 
 handler = Mangum(app)
 
-def lambda_handler(event, context):
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     return handler(event, context)
