@@ -64,6 +64,8 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
 handler = Mangum(app)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    import json
+    print("Lambda event:", json.dumps(event))
     if event["requestContext"]["http"]["method"] == "OPTIONS":
         return {
             "statusCode": 200,
