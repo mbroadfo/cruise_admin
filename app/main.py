@@ -6,6 +6,7 @@ from admin.auth0_utils import get_m2m_token, get_all_users, create_user, send_pa
 import threading
 from mangum import Mangum  # 👈 this bridges FastAPI to AWS Lambda
 from typing import Any, Dict, TYPE_CHECKING
+import json
 
 if TYPE_CHECKING:
     from typing import Callable
@@ -64,10 +65,11 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
 handler = Mangum(app)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    import json
     print(f"Incoming event: {json.dumps(event)}")
 
-    if event.get("requestContext", {}).get("http", {}).get("method") == "OPTIONS":
+    method = event.get("requestContext", {}).get("http", {}).get("method", "")
+
+    if method == "OPTIONS":
         print("Handling CORS preflight OPTIONS request")
         return {
             "statusCode": 200,
@@ -79,17 +81,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "body": "",
         }
 
-    # Normal requests
+    # Handle normal requests
     response = handler(event, context)
     print(f"Handler response: {response}")
 
     if isinstance(response, dict):
-        if "headers" not in response:
-            response["headers"] = {}
-        response["headers"]["Access-Control-Allow-Origin"] = "*"
-        response["headers"]["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
-        response["headers"]["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        response.setdefault("headers", {})
+        response["headers"].update({
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+        })
 
     print(f"Final response: {response}")
     return response
-
