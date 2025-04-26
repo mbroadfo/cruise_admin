@@ -64,4 +64,14 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
 handler = Mangum(app)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    if event["requestContext"]["http"]["method"] == "OPTIONS":
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",  # or your specific origins
+                "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            },
+            "body": "",
+        }
     return handler(event, context)
