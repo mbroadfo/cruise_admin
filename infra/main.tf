@@ -187,7 +187,10 @@ resource "aws_api_gateway_deployment" "deploy" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   
   triggers = {
-    redeployment = sha1(jsonencode(aws_api_gateway_integration_response.get_integration_response))
+    redeployment = sha1(jsonencode({
+      integration_response = aws_api_gateway_integration_response.get_integration_response.id
+      random_force_redeploy = timestamp() # <--- Force it to re-deploy
+    }))
   }
 
   lifecycle {
@@ -200,6 +203,27 @@ resource "aws_api_gateway_stage" "prod" {
   stage_name    = "prod"
   rest_api_id   = aws_api_gateway_rest_api.api.id
   deployment_id = aws_api_gateway_deployment.deploy.id
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gw_logs.arn
+    format = jsonencode({
+      requestId      = "$context.requestId",
+      ip             = "$context.identity.sourceIp",
+      caller         = "$context.identity.caller",
+      user           = "$context.identity.user",
+      requestTime    = "$context.requestTime",
+      httpMethod     = "$context.httpMethod",
+      resourcePath   = "$context.resourcePath",
+      status         = "$context.status",
+      protocol       = "$context.protocol",
+      responseLength = "$context.responseLength",
+      errorMessage   = "$context.error.message"
+    })
+  }
+
+  xray_tracing_enabled = true
+
+  tags = {}
 }
 
 #------------------------------------------
@@ -227,7 +251,7 @@ resource "aws_api_gateway_integration_response" "get_integration_response" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   resource_id = aws_api_gateway_resource.users.id
   http_method = aws_api_gateway_method.get_users.http_method
-  status_code = aws_api_gateway_method_response.get_response.status_code
+  status_code = "200"
 
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = "'*'",
@@ -253,4 +277,48 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
   lifecycle {
     prevent_destroy = true
   }
+}
+
+#------------------------------------------
+# CloudWatch Logging on API Gateway Account
+#------------------------------------------
+resource "aws_api_gateway_account" "this" {
+  cloudwatch_role_arn = aws_iam_role.apigateway_cloudwatch_role.arn
+}
+
+resource "aws_iam_role" "apigateway_cloudwatch_role" {
+  name = "${var.app_name}-apigw-cloudwatch-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        Service = "apigateway.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "apigateway_cloudwatch_role_policy" {
+  name = "${var.app_name}-apigw-cloudwatch-policy"
+  role = aws_iam_role.apigateway_cloudwatch_role.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:GetLogEvents",
+          "logs:FilterLogEvents",
+        ],
+        Resource = "*"
+      }
+    ]
+  })
 }

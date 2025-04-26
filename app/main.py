@@ -67,10 +67,9 @@ handler = Mangum(app)
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     print(f"Incoming event: {json.dumps(event)}")
 
+    # Handle CORS preflight (OPTIONS method)
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
-
     if method == "OPTIONS":
-        print("Handling CORS preflight OPTIONS request")
         return {
             "statusCode": 200,
             "headers": {
@@ -78,23 +77,20 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
                 "Access-Control-Allow-Headers": "Authorization, Content-Type",
             },
-            "body": "",
+            "body": ""
         }
 
-    # Handle normal requests
+    # Normal proxy integration
     mangum_response = handler(event, context)
+    print(f"Handler response: {json.dumps(mangum_response)}")
 
-    # Ensure mangum_response is a dict
-    if not isinstance(mangum_response, dict):
-        mangum_response = json.loads(json.dumps(mangum_response))
+    # Fix: ensure CORS headers on actual Lambda response
+    if isinstance(mangum_response, dict):
+        headers = mangum_response.get("headers", {})
+        headers["Access-Control-Allow-Origin"] = "*"
+        headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+        headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        mangum_response["headers"] = headers
 
-    # Ensure headers exist
-    mangum_response.setdefault("headers", {})
-    mangum_response["headers"].update({
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Authorization, Content-Type",
-    })
-
-    print(f"Final response: {mangum_response}")
+    print(f"Final outgoing response: {json.dumps(mangum_response)}")
     return mangum_response
