@@ -1,4 +1,4 @@
 output "api_gateway_url" {
-  description = "URL for the deployed API Gateway"
-  value       = aws_apigatewayv2_api.api.api_endpoint
+  description = "Invoke URL of API Gateway"
+  value       = aws_api_gateway_stage.prod.invoke_url
 }
