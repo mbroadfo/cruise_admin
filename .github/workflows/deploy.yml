@@ -17,9 +17,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -36,11 +33,3 @@ jobs:
           docker build --platform linux/amd64 -t cruise-admin-api:latest .
           docker tag cruise-admin-api:latest 491696534851.dkr.ecr.us-west-2.amazonaws.com/cruise-admin-api:latest
           docker push 491696534851.dkr.ecr.us-west-2.amazonaws.com/cruise-admin-api:latest
-
-      - name: Terraform Init
-        working-directory: ./infra
-        run: terraform init
-
-      - name: Terraform Apply
-        working-directory: ./infra
-        run: terraform apply -auto-approve
