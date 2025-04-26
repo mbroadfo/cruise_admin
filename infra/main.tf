@@ -90,6 +90,18 @@ resource "aws_lambda_function" "app" {
 resource "aws_apigatewayv2_api" "api" {
   name          = "${var.app_name}-api"
   protocol_type = "HTTP"
+
+  cors_configuration {
+    allow_origins = [
+      "http://localhost:4173",
+      "http://localhost:5173",
+      "https://da389rkfiajdk.cloudfront.net"
+    ]
+    allow_methods = ["GET", "POST", "DELETE", "OPTIONS"]
+    allow_headers = ["Authorization", "Content-Type"]
+    expose_headers = []
+    max_age = 3600
+  }
 }
 
 resource "aws_apigatewayv2_authorizer" "jwt_auth" {

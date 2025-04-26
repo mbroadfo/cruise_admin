@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, Response, HTTPException
 from app.models import InviteUserRequest, DeleteUserRequest, StandardResponse
+from fastapi.middleware.cors import CORSMiddleware
 from app.shutdown import monitor_idle_shutdown, update_last_activity_middleware
 from admin.auth0_utils import get_m2m_token, get_all_users, create_user, send_password_reset_email, delete_user, find_user
 import threading
@@ -11,6 +12,19 @@ if TYPE_CHECKING:
 
 
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
+
+# Allow CORS for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:4173",
+        "http://localhost:5173",
+        "https://da389rkfiajdk.cloudfront.net",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Start idle shutdown monitor
 threading.Thread(target=monitor_idle_shutdown, daemon=True).start()
