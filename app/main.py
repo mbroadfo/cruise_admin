@@ -64,7 +64,11 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
 handler = Mangum(app)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    if event["requestContext"]["http"]["method"] == "OPTIONS":
+    import json
+    print(f"Incoming event: {json.dumps(event)}")
+
+    if event.get("requestContext", {}).get("http", {}).get("method") == "OPTIONS":
+        print("Handling CORS preflight OPTIONS request")
         return {
             "statusCode": 200,
             "headers": {
@@ -74,11 +78,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             },
             "body": "",
         }
-    
-    # Handle normal requests
-    response = handler(event, context)
 
-    # If response is a dict, inject CORS headers
+    # Normal requests
+    response = handler(event, context)
+    print(f"Handler response: {response}")
+
     if isinstance(response, dict):
         if "headers" not in response:
             response["headers"] = {}
@@ -86,5 +90,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         response["headers"]["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
         response["headers"]["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
 
+    print(f"Final response: {response}")
     return response
 
