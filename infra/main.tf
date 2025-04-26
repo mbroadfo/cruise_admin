@@ -185,15 +185,55 @@ resource "aws_api_gateway_integration" "lambda_integration" {
 
 resource "aws_api_gateway_deployment" "deploy" {
   rest_api_id = aws_api_gateway_rest_api.api.id
+  
+  triggers = {
+    redeployment = sha1(jsonencode(aws_api_gateway_integration_response.get_integration_response))
+  }
+
   lifecycle {
     create_before_destroy = true
   }
 }
 
+
 resource "aws_api_gateway_stage" "prod" {
   stage_name    = "prod"
   rest_api_id   = aws_api_gateway_rest_api.api.id
   deployment_id = aws_api_gateway_deployment.deploy.id
+}
+
+#------------------------------------------
+# CORS for GET /admin-api/users
+#------------------------------------------
+
+resource "aws_api_gateway_method_response" "get_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.get_users.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Headers" = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "get_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.get_users.http_method
+  status_code = aws_api_gateway_method_response.get_response.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'",
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,GET,POST,DELETE'",
+    "method.response.header.Access-Control-Allow-Headers" = "'Authorization,Content-Type'"
+  }
 }
 
 #------------------------------------------
