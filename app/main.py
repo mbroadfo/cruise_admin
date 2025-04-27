@@ -67,7 +67,7 @@ handler = Mangum(app)
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     print(f"Incoming event: {json.dumps(event)}")
 
-    method = event.get("requestContext", {}).get("http", {}).get("method", "")
+    method = event.get("requestContext", {}).get("httpMethod", "")  # <-- corrected key
 
     if method == "OPTIONS":
         print("Handling CORS preflight OPTIONS request")
@@ -75,37 +75,25 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "statusCode": 200,
             "headers": {
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Authorization, Content-Type",
+                "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
+                "Access-Control-Allow-Headers": "Authorization,Content-Type",
             },
             "body": ""
         }
 
     # Normal request
     response = handler(event, context)
-    print(f"Handler response before CORS: {response}")
 
+    # 💣 Important: Force the CORS headers into normal responses too
     if isinstance(response, dict):
-        # Enforce correct headers
-        headers = response.get("headers", {})
-        headers.update({
+        if 'headers' not in response:
+            response['headers'] = {}
+        response['headers'].update({
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
+            "Access-Control-Allow-Headers": "Authorization,Content-Type",
         })
 
-        # Important: Ensure body is a string
-        body = response.get("body")
-        if isinstance(body, (dict, list)):
-            body = json.dumps(body)
+    print(f"Final response: {response}")
+    return response
 
-        final_response = {
-            "statusCode": response.get("statusCode", 200),
-            "headers": headers,
-            "body": body if isinstance(body, str) else str(body),
-        }
-
-        print(f"Final response: {final_response}")
-        return final_response
-
-    raise Exception("Unexpected non-dict Lambda response")
