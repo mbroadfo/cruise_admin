@@ -67,7 +67,6 @@ handler = Mangum(app)
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     print(f"Incoming event: {json.dumps(event)}")
 
-    # Handle CORS preflight (OPTIONS method)
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
 
     if method == "OPTIONS":
@@ -82,18 +81,31 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "body": ""
         }
 
-    # Handle normal requests through Mangum
+    # Normal request
     response = handler(event, context)
-    print(f"Handler response before adding CORS: {response}")
+    print(f"Handler response before CORS: {response}")
 
     if isinstance(response, dict):
+        # Enforce correct headers
         headers = response.get("headers", {})
         headers.update({
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "Authorization, Content-Type",
         })
-        response["headers"] = headers
 
-    print(f"Final response with CORS: {response}")
-    return response
+        # Important: Ensure body is a string
+        body = response.get("body")
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body)
+
+        final_response = {
+            "statusCode": response.get("statusCode", 200),
+            "headers": headers,
+            "body": body if isinstance(body, str) else str(body),
+        }
+
+        print(f"Final response: {final_response}")
+        return final_response
+
+    raise Exception("Unexpected non-dict Lambda response")
