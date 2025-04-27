@@ -67,33 +67,35 @@ handler = Mangum(app)
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     print(f"Incoming event: {json.dumps(event)}")
 
-    method = event.get("requestContext", {}).get("httpMethod", "")  # <-- corrected key
-
-    if method == "OPTIONS":
+    if event.get("requestContext", {}).get("http", {}).get("method", "") == "OPTIONS":
         print("Handling CORS preflight OPTIONS request")
         return {
             "statusCode": 200,
             "headers": {
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
-                "Access-Control-Allow-Headers": "Authorization,Content-Type",
+                "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Authorization, Content-Type",
             },
-            "body": ""
+            "body": "",
         }
 
-    # Normal request
     response = handler(event, context)
 
-    # 💣 Important: Force the CORS headers into normal responses too
-    if isinstance(response, dict):
-        if 'headers' not in response:
-            response['headers'] = {}
-        response['headers'].update({
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
-            "Access-Control-Allow-Headers": "Authorization,Content-Type",
-        })
+    # 🔥 Force override CORS headers properly
+    if isinstance(response, dict) and "headers" in response:
+        response["headers"]["Access-Control-Allow-Origin"] = "*"
+        response["headers"]["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+        response["headers"]["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+    else:
+        response = {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            },
+            "body": json.dumps(response)
+        }
 
     print(f"Final response: {response}")
     return response
-
