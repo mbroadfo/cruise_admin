@@ -254,9 +254,9 @@ resource "aws_api_gateway_integration_response" "get_integration_response" {
   status_code = "200"
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"  = "integration.response.header.Access-Control-Allow-Origin",
-    "method.response.header.Access-Control-Allow-Methods" = "integration.response.header.Access-Control-Allow-Methods",
-    "method.response.header.Access-Control-Allow-Headers" = "integration.response.header.Access-Control-Allow-Headers"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'",
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,GET,POST,DELETE'",
+    "method.response.header.Access-Control-Allow-Headers" = "'Authorization,Content-Type'"
   }
 }
 
