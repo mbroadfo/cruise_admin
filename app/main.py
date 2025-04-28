@@ -107,6 +107,29 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "body": "",
         }
 
-    response = handler(event, context)
+    # Handle normal requests
+    raw_response = handler(event, context)
 
-    return response
+    logger.info(f"Handling normal response, adding CORS headers")
+
+    if isinstance(raw_response, dict):
+        headers = raw_response.get("headers", {})
+        headers.update({
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+        })
+        raw_response["headers"] = headers
+        return raw_response
+    else:
+        logger.warning("Unexpected response format, wrapping manually.")
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Authorization, Content-Type",
+                "Content-Type": "application/json"
+            },
+            "body": json.dumps(raw_response)
+        }
