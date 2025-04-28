@@ -8,9 +8,14 @@ import threading
 from mangum import Mangum
 from typing import Any, Dict, TYPE_CHECKING
 import json
+import logging
 
 if TYPE_CHECKING:
     from typing import Callable
+
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
@@ -33,6 +38,15 @@ threading.Thread(target=monitor_idle_shutdown, daemon=True).start()
 @app.middleware("http")
 async def last_activity_tracker(request: Request, call_next: Callable) -> Response:
     return await update_last_activity_middleware(request, call_next)
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next: "Callable") -> Response:
+    logger.info(f"Incoming request: {request.method} {request.url.path}")
+
+    response = await call_next(request)
+
+    logger.info(f"Completed {request.method} {request.url.path} with status {response.status_code}")
+    return response
 
 @app.get("/admin-api/users", response_model=StandardResponse)
 async def list_users_api() -> StandardResponse:
@@ -64,10 +78,10 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
 handler = Mangum(app)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    print(f"Incoming event: {json.dumps(event)}")
+    logger.info(f"Incoming event: {json.dumps(event)}")
 
     if event.get("requestContext", {}).get("http", {}).get("method", "") == "OPTIONS":
-        print("Handling CORS preflight OPTIONS request")
+        logger.info("Handling CORS preflight OPTIONS request")
         return {
             "statusCode": 200,
             "headers": {
@@ -81,10 +95,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     response = handler(event, context)
 
     if isinstance(response, dict) and "headers" in response:
+        logger.info(f"Returning response with status: {response.get('statusCode')}")
         response["headers"]["Access-Control-Allow-Origin"] = "*"
         response["headers"]["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
         response["headers"]["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
     else:
+        logger.warning("Unexpected response type, wrapping manually...")
         response = {
             "statusCode": 200,
             "headers": {
@@ -95,5 +111,5 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "body": json.dumps(response)
         }
 
-    print(f"Final response: {response}")
+    logger.info(f"Final outgoing response: {json.dumps(response)}")
     return response
