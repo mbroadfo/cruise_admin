@@ -10,11 +10,12 @@ from typing import Any, Dict, TYPE_CHECKING, TextIO
 import json
 import logging
 import sys
+import io
 
 if TYPE_CHECKING:
     from typing import Callable
-    
-class Unbuffered():
+
+class Unbuffered:
     def __init__(self, stream: TextIO) -> None:
         self.stream = stream
 
@@ -28,44 +29,36 @@ class Unbuffered():
 
     def __getattr__(self, name: str) -> object:
         return getattr(self.stream, name)
-       
+
 # Setup logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+if logger.hasHandlers():
+    logger.handlers.clear()
 
 log_handler = logging.StreamHandler(sys.stdout)
 log_handler.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 log_handler.setFormatter(formatter)
-
-if logger.hasHandlers():
-    logger.handlers.clear()
 logger.addHandler(log_handler)
 
 # Force line-buffering or manually flush
 try:
-    import io
-
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(line_buffering=True)
-
     if isinstance(sys.stderr, io.TextIOWrapper):
         sys.stderr.reconfigure(line_buffering=True)
-
 except AttributeError:
     sys.stdout = Unbuffered(sys.stdout)  # type: ignore
     sys.stderr = Unbuffered(sys.stderr)  # type: ignore
-    
+
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
 # Allow CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:4173",
-        "http://localhost:5173",
-        "https://da389rkfiajdk.cloudfront.net",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -79,7 +72,7 @@ async def last_activity_tracker(request: Request, call_next: Callable) -> Respon
     return await update_last_activity_middleware(request, call_next)
 
 @app.middleware("http")
-async def log_requests(request: Request, call_next: "Callable") -> Response:
+async def log_requests(request: Request, call_next: Callable) -> Response:
     logger.info(f"📥 Incoming request: {request.method} {request.url.path}")
     response = await call_next(request)
     logger.info(f"📤 Completed {request.method} {request.url.path} with status {response.status_code}")
@@ -87,13 +80,13 @@ async def log_requests(request: Request, call_next: "Callable") -> Response:
 
 @app.get("/admin-api/users", response_model=StandardResponse)
 async def list_users_api() -> StandardResponse:
-    token = get_auth0_mgmt_token()  # << use the cached token
+    token = get_auth0_mgmt_token()
     users = get_all_users(token)
     return StandardResponse(success=True, message="Users listed successfully", data={"users": users})
 
 @app.post("/admin-api/users", response_model=StandardResponse)
 async def invite_user_api(payload: InviteUserRequest) -> StandardResponse:
-    token = get_auth0_mgmt_token()  # << use the cached token
+    token = get_auth0_mgmt_token()
     user = find_user(payload.email)
 
     if user:
