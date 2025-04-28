@@ -109,22 +109,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     response = handler(event, context)
 
-    if isinstance(response, dict) and "headers" in response:
-        logger.info(f"Returning response with status: {response.get('statusCode')}")
-        response["headers"]["Access-Control-Allow-Origin"] = "*"
-        response["headers"]["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
-        response["headers"]["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
-    else:
-        logger.warning("Unexpected response type, wrapping manually...")
-        response = {
-            "statusCode": 200,
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Authorization, Content-Type",
-            },
-            "body": json.dumps(response)
-        }
+    wrapped_response = {
+        "statusCode": response.get("statusCode", 200),
+        "headers": {
+            **response.get("headers", {}),
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+        },
+        "body": response.get("body", "{}"),
+    }
 
-    logger.info(f"Final outgoing response: {json.dumps(response)}")
-    return response
+    logger.info(f"Final outgoing response: {json.dumps(wrapped_response)}")
+    return wrapped_response
