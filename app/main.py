@@ -6,32 +6,56 @@ from admin.auth0_utils import get_all_users, create_user, send_password_reset_em
 from admin.token_cache import get_auth0_mgmt_token
 import threading
 from mangum import Mangum
-from typing import Any, Dict, TYPE_CHECKING
+from typing import Any, Dict, TYPE_CHECKING, TextIO
 import json
 import logging
 import sys
 
 if TYPE_CHECKING:
     from typing import Callable
+    
+class Unbuffered():
+    def __init__(self, stream: TextIO) -> None:
+        self.stream = stream
 
-# Setup robust Lambda-safe logging
+    def write(self, data: str) -> int:
+        written = self.stream.write(data)
+        self.stream.flush()
+        return written
+
+    def flush(self) -> None:
+        self.stream.flush()
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self.stream, name)
+       
+# Setup logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.INFO)
+log_handler = logging.StreamHandler(sys.stdout)
+log_handler.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-handler.setFormatter(formatter)
+log_handler.setFormatter(formatter)
 
 if logger.hasHandlers():
     logger.handlers.clear()
+logger.addHandler(log_handler)
 
-logger.addHandler(handler)
+# Force line-buffering or manually flush
+try:
+    import io
 
-# Force unbuffered stdout
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(line_buffering=True)
 
+    if isinstance(sys.stderr, io.TextIOWrapper):
+        sys.stderr.reconfigure(line_buffering=True)
+
+except AttributeError:
+    sys.stdout = Unbuffered(sys.stdout)  # type: ignore
+    sys.stderr = Unbuffered(sys.stderr)  # type: ignore
+    
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
 # Allow CORS for frontend
@@ -57,9 +81,7 @@ async def last_activity_tracker(request: Request, call_next: Callable) -> Respon
 @app.middleware("http")
 async def log_requests(request: Request, call_next: "Callable") -> Response:
     logger.info(f"📥 Incoming request: {request.method} {request.url.path}")
-
     response = await call_next(request)
-
     logger.info(f"📤 Completed {request.method} {request.url.path} with status {response.status_code}")
     return response
 
@@ -101,35 +123,35 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "statusCode": 200,
             "headers": {
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Authorization, Content-Type",
+                "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
+                "Access-Control-Allow-Headers": "Authorization,Content-Type",
             },
-            "body": "",
+            "body": ""
         }
 
-    # Handle normal requests
+    # Regular handling
     raw_response = handler(event, context)
 
-    logger.info(f"Handling normal response, adding CORS headers")
+    logger.info("Adding CORS headers to Lambda proxy integration response")
 
     if isinstance(raw_response, dict):
-        headers = raw_response.get("headers", {})
+        headers = raw_response.setdefault("headers", {})
         headers.update({
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
+            "Access-Control-Allow-Headers": "Authorization,Content-Type",
         })
         raw_response["headers"] = headers
         return raw_response
     else:
-        logger.warning("Unexpected response format, wrapping manually.")
+        logger.warning("Unexpected non-dict response, wrapping manually.")
         return {
             "statusCode": 200,
             "headers": {
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Authorization, Content-Type",
-                "Content-Type": "application/json"
+                "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
+                "Access-Control-Allow-Headers": "Authorization,Content-Type",
+                "Content-Type": "application/json",
             },
             "body": json.dumps(raw_response)
         }
