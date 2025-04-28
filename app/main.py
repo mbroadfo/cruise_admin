@@ -11,6 +11,7 @@ import json
 import logging
 import sys
 import io
+import traceback
 
 if TYPE_CHECKING:
     from typing import Callable
@@ -108,43 +109,66 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
 handler = Mangum(app)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    logger.info(f"Incoming event: {json.dumps(event)}")
+    # Initialize default response headers
+    cors_headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
+        "Access-Control-Allow-Headers": "Authorization,Content-Type"
+    }
+    
+    try:
+        logger.info(f"Incoming event: {json.dumps(event, indent=2)}")
+        
+        # Handle direct invocation (testing)
+        if not event.get("requestContext") and not event.get("httpMethod"):
+            logger.info("Direct invocation detected")
+            return {
+                "statusCode": 200,
+                "headers": {**cors_headers, "Content-Type": "application/json"},
+                "body": json.dumps({
+                    "message": "Direct invocation successful",
+                    "event": event  # Include event for debugging
+                })
+            }
 
-    if event.get("requestContext", {}).get("http", {}).get("method", "") == "OPTIONS":
-        logger.info("Handling CORS preflight OPTIONS request")
+        # Handle OPTIONS preflight
+        if event.get("httpMethod") == "OPTIONS" or (
+            event.get("requestContext", {}).get("http", {}).get("method") == "OPTIONS"
+        ):
+            logger.info("Handling CORS preflight OPTIONS request")
+            return {
+                "statusCode": 200,
+                "headers": cors_headers,
+                "body": ""
+            }
+
+        # Process regular request
+        logger.info("Processing API request")
+        response = handler(event, context)
+        
+        # Ensure response is properly formatted
+        if not isinstance(response, dict):
+            logger.warning("Received non-dict response from handler")
+            response = {
+                "statusCode": 200,
+                "body": json.dumps(response),
+                "headers": {"Content-Type": "application/json"}
+            }
+        
+        # Merge CORS headers
+        response.setdefault("headers", {}).update(cors_headers)
+        
+        logger.info(f"Final response: {json.dumps(response, indent=2)}")
+        return response
+
+    except Exception as e:
+        logger.error(f"Handler error: {str(e)}\n{traceback.format_exc()}")
         return {
-            "statusCode": 200,
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
-                "Access-Control-Allow-Headers": "Authorization,Content-Type",
-            },
-            "body": ""
-        }
-
-    # Regular handling
-    raw_response = handler(event, context)
-
-    logger.info("Adding CORS headers to Lambda proxy integration response")
-
-    if isinstance(raw_response, dict):
-        headers = raw_response.setdefault("headers", {})
-        headers.update({
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
-            "Access-Control-Allow-Headers": "Authorization,Content-Type",
-        })
-        raw_response["headers"] = headers
-        return raw_response
-    else:
-        logger.warning("Unexpected non-dict response, wrapping manually.")
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
-                "Access-Control-Allow-Headers": "Authorization,Content-Type",
-                "Content-Type": "application/json",
-            },
-            "body": json.dumps(raw_response)
+            "statusCode": 500,
+            "headers": {**cors_headers, "Content-Type": "application/json"},
+            "body": json.dumps({
+                "error": str(e),
+                "event": event,  # Include the problematic event
+                "stacktrace": traceback.format_exc()
+            })
         }
