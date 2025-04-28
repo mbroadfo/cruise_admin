@@ -14,12 +14,18 @@ import sys
 if TYPE_CHECKING:
     from typing import Callable
 
-# Setup logging
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(message)s",
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+# Setup robust Lambda-safe logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+handler.setFormatter(formatter)
+
+if logger.hasHandlers():
+    logger.handlers.clear()
+
+logger.addHandler(handler)
 
 # Force unbuffered stdout
 sys.stdout.reconfigure(line_buffering=True)
