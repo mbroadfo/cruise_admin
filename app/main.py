@@ -109,7 +109,7 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
 handler = Mangum(app)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    # Initialize default response headers
+    # Define CORS headers
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
@@ -117,25 +117,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     }
     
     try:
-        logger.info(f"Incoming event: {json.dumps(event, indent=2)}")
-        
-        # Handle direct invocation (testing)
-        if not event.get("requestContext") and not event.get("httpMethod"):
-            logger.info("Direct invocation detected")
-            return {
-                "statusCode": 200,
-                "headers": {**cors_headers, "Content-Type": "application/json"},
-                "body": json.dumps({
-                    "message": "Direct invocation successful",
-                    "event": event  # Include event for debugging
-                })
-            }
-
         # Handle OPTIONS preflight
-        if event.get("httpMethod") == "OPTIONS" or (
-            event.get("requestContext", {}).get("http", {}).get("method") == "OPTIONS"
-        ):
-            logger.info("Handling CORS preflight OPTIONS request")
+        if event.get("httpMethod") == "OPTIONS":
             return {
                 "statusCode": 200,
                 "headers": cors_headers,
@@ -143,32 +126,35 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             }
 
         # Process regular request
-        logger.info("Processing API request")
         response = handler(event, context)
         
         # Ensure response is properly formatted
         if not isinstance(response, dict):
-            logger.warning("Received non-dict response from handler")
             response = {
                 "statusCode": 200,
                 "body": json.dumps(response),
                 "headers": {"Content-Type": "application/json"}
             }
         
-        # Merge CORS headers
-        response.setdefault("headers", {}).update(cors_headers)
+        # Merge and properly case headers (API Gateway is case-sensitive)
+        final_headers = {
+            "Content-Type": "application/json",
+            **cors_headers,
+            **response.get("headers", {})
+        }
         
-        logger.info(f"Final response: {json.dumps(response, indent=2)}")
-        return response
+        return {
+            "statusCode": response.get("statusCode", 200),
+            "headers": final_headers,
+            "body": response.get("body", "")
+        }
 
     except Exception as e:
-        logger.error(f"Handler error: {str(e)}\n{traceback.format_exc()}")
         return {
             "statusCode": 500,
-            "headers": {**cors_headers, "Content-Type": "application/json"},
-            "body": json.dumps({
-                "error": str(e),
-                "event": event,  # Include the problematic event
-                "stacktrace": traceback.format_exc()
-            })
+            "headers": {
+                "Content-Type": "application/json",
+                **cors_headers
+            },
+            "body": json.dumps({"error": str(e)})
         }

@@ -177,26 +177,22 @@ resource "aws_api_gateway_integration" "lambda_integration" {
   resource_id             = aws_api_gateway_resource.users.id
   http_method             = aws_api_gateway_method.get_users.http_method
   integration_http_method = "POST"
-  type                    = "AWS_PROXY"
+  type                    = "AWS_PROXY"  # Must be PROXY to pass headers
   uri                     = aws_lambda_function.app.invoke_arn
-
-  depends_on = [aws_api_gateway_method.get_users]
 }
 
 resource "aws_api_gateway_deployment" "deploy" {
   rest_api_id = aws_api_gateway_rest_api.api.id
-  
   triggers = {
-    redeployment = sha1(jsonencode({
-      random_force_redeploy = timestamp() # <--- Force it to re-deploy
-    }))
+    redeployment = sha1(jsonencode([
+      timestamp(),  # Forces redeploy every time
+      file("main.py")  # Also redeploy when code changes
+    ]))
   }
-
   lifecycle {
     create_before_destroy = true
   }
 }
-
 
 resource "aws_api_gateway_stage" "prod" {
   stage_name    = "prod"
