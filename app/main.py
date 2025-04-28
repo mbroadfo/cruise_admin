@@ -2,15 +2,15 @@ from fastapi import FastAPI, Request, Response, HTTPException
 from app.models import InviteUserRequest, DeleteUserRequest, StandardResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.shutdown import monitor_idle_shutdown, update_last_activity_middleware
-from admin.auth0_utils import get_m2m_token, get_all_users, create_user, send_password_reset_email, delete_user, find_user
+from admin.auth0_utils import get_all_users, create_user, send_password_reset_email, delete_user, find_user
+from admin.token_cache import get_auth0_mgmt_token
 import threading
-from mangum import Mangum  # 👈 this bridges FastAPI to AWS Lambda
+from mangum import Mangum
 from typing import Any, Dict, TYPE_CHECKING
 import json
 
 if TYPE_CHECKING:
     from typing import Callable
-
 
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
@@ -30,20 +30,19 @@ app.add_middleware(
 # Start idle shutdown monitor
 threading.Thread(target=monitor_idle_shutdown, daemon=True).start()
 
-# Middleware to track last request time
 @app.middleware("http")
 async def last_activity_tracker(request: Request, call_next: Callable) -> Response:
     return await update_last_activity_middleware(request, call_next)
 
 @app.get("/admin-api/users", response_model=StandardResponse)
 async def list_users_api() -> StandardResponse:
-    token = get_m2m_token()
+    token = get_auth0_mgmt_token()  # << use the cached token
     users = get_all_users(token)
     return StandardResponse(success=True, message="Users listed successfully", data={"users": users})
 
 @app.post("/admin-api/users", response_model=StandardResponse)
 async def invite_user_api(payload: InviteUserRequest) -> StandardResponse:
-    token = get_m2m_token()
+    token = get_auth0_mgmt_token()  # << use the cached token
     user = find_user(payload.email)
 
     if user:
@@ -81,7 +80,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     response = handler(event, context)
 
-    # 🔥 Force override CORS headers properly
     if isinstance(response, dict) and "headers" in response:
         response["headers"]["Access-Control-Allow-Origin"] = "*"
         response["headers"]["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"

@@ -24,13 +24,11 @@ def invite() -> None:
         click.echo("❌ Cancelled.")
         return
 
-    click.echo("\n🔐 Requesting token...")
-    token = get_m2m_token()
-
     click.echo("📨 Validating user...")
     user = find_user(email)
     
     if user is None:
+        token = get_m2m_token()
         click.echo("📨 Creating user...")
         user = create_user(email, given_name, family_name, token)
     

@@ -2,8 +2,9 @@ import os
 import requests
 import secrets
 import string
-from typing import List
+from typing import List, Optional
 from admin.aws_secrets import inject_env_from_secrets
+from admin.token_cache import get_auth0_mgmt_token as get_m2m_token  # <-- use the cached version
 
 # Inject secrets from AWS Secrets Manager
 inject_env_from_secrets("cruise-finder-secrets")
@@ -16,19 +17,7 @@ AUTH0_CONNECTION = os.getenv("AUTH0_CONNECTION", "Username-Password-Authenticati
 CLOUD_FRONT_URI = os.getenv("CLOUD_FRONT_URI")
 
 
-def get_m2m_token() -> str:
-    url = f"https://{AUTH0_DOMAIN}/oauth/token"
-    payload = {
-        "client_id": AUTH0_CLIENT_ID,
-        "client_secret": AUTH0_CLIENT_SECRET,
-        "audience": f"https://{AUTH0_DOMAIN}/api/v2/",
-        "grant_type": "client_credentials",
-    }
-    resp = requests.post(url, json=payload)
-    resp.raise_for_status()
-    return resp.json()["access_token"]
-
-def generate_temp_password(length:int=16) -> str:
+def generate_temp_password(length: int = 16) -> str:
     chars = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
     return ''.join(secrets.choice(chars) for _ in range(length))
 
@@ -53,7 +42,7 @@ def create_user(email: str, given_name: str, family_name: str, token: str) -> di
         resp.raise_for_status()
     return resp.json()
 
-def send_password_reset_email(email: str, token: str | None = None) -> None:
+def send_password_reset_email(email: str, token: Optional[str] = None) -> None:
     url = f"https://{AUTH0_DOMAIN}/dbconnections/change_password"
     payload = {
         "client_id": AUTH0_WEB_CLIENT_ID,
@@ -79,20 +68,20 @@ def send_password_reset_email(email: str, token: str | None = None) -> None:
         resp.raise_for_status()
     print("📬 Password reset email sent by Auth0!")
 
-def find_user(email: str) -> dict | None:
+def find_user(email: str) -> Optional[dict]:
     """List all users in the Auth0 tenant."""
     token = get_m2m_token()
     url = f"https://{AUTH0_DOMAIN}/api/v2/users?q={email}"
     headers = {
         "Authorization": f"Bearer {token}"
     }
-    
+
     resp = requests.get(url, headers=headers)
     resp.raise_for_status()
     users = resp.json()
-    
+
     return users[0] if users else None
-    
+
 def list_users() -> None:
     """List all users in the Auth0 tenant."""
     token = get_m2m_token()
@@ -126,7 +115,7 @@ def list_users() -> None:
         print(f"- {user.get('email')} ({user.get('user_id')})")
     print("")
 
-def delete_user(user_id: str | None) -> None:
+def delete_user(user_id: Optional[str]) -> None:
     """Delete a user from Auth0 by user ID."""
     token = get_m2m_token()
     url = f"https://{AUTH0_DOMAIN}/api/v2/users/{user_id}"
