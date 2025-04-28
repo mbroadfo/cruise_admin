@@ -109,16 +109,4 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     response = handler(event, context)
 
-    wrapped_response = {
-        "statusCode": response.get("statusCode", 200),
-        "headers": {
-            **response.get("headers", {}),
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type",
-        },
-        "body": response.get("body", "{}"),
-    }
-
-    logger.info(f"Final outgoing response: {json.dumps(wrapped_response)}")
-    return wrapped_response
+    return response
