@@ -9,15 +9,21 @@ from mangum import Mangum
 from typing import Any, Dict, TYPE_CHECKING
 import json
 import logging
+import sys
 
 if TYPE_CHECKING:
     from typing import Callable
 
+# Setup logging
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Force unbuffered stdout
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
