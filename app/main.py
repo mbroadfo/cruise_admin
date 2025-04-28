@@ -13,9 +13,11 @@ import logging
 if TYPE_CHECKING:
     from typing import Callable
 
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s %(levelname)s %(message)s",
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
@@ -41,11 +43,11 @@ async def last_activity_tracker(request: Request, call_next: Callable) -> Respon
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next: "Callable") -> Response:
-    logger.info(f"Incoming request: {request.method} {request.url.path}")
+    logger.info(f"📥 Incoming request: {request.method} {request.url.path}")
 
     response = await call_next(request)
 
-    logger.info(f"Completed {request.method} {request.url.path} with status {response.status_code}")
+    logger.info(f"📤 Completed {request.method} {request.url.path} with status {response.status_code}")
     return response
 
 @app.get("/admin-api/users", response_model=StandardResponse)
