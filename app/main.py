@@ -6,21 +6,21 @@ from admin.auth0_utils import get_all_users, create_user, send_password_reset_em
 from admin.token_cache import get_auth0_mgmt_token
 import threading
 from mangum import Mangum
-from typing import Any, Dict, TYPE_CHECKING, TextIO
+from typing import Any, Dict, TYPE_CHECKING, Callable
 import json
 import logging
 import sys
 import traceback
-from logging.handlers import RotatingFileHandler
+
 
 if TYPE_CHECKING:
     from typing import Callable
 
 # Clear any existing handlers
-root = logging.getLogger()
-if root.handlers:
-    for handler in root.handlers:
-        root.removeHandler(handler)
+log_root = logging.getLogger()
+if log_root.handlers:
+    for log_handler in log_root.handlers:
+        log_root.removeHandler(log_handler)
 
 # Configure logging
 logging.basicConfig(
@@ -88,7 +88,7 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
     delete_user(user.get("user_id"))
     return StandardResponse(success=True, message="User deleted successfully")
 
-handler = Mangum(app)
+handler: Callable[[Dict[str, Any], Any], Dict[str, Any]] = Mangum(app)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Initialize logging first
