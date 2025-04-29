@@ -15,33 +15,15 @@ import io
 if TYPE_CHECKING:
     from typing import Callable
 
-class Unbuffered:
-    def __init__(self, stream: TextIO) -> None:
-        self.stream = stream
-
-    def write(self, data: str) -> int:
-        written = self.stream.write(data)
-        self.stream.flush()
-        return written
-
-    def flush(self) -> None:
-        self.stream.flush()
-
-    def __getattr__(self, name: str) -> object:
-        return getattr(self.stream, name)
-
 # Setup logging
 logger = logging.getLogger()
+logger.handlers.clear()  # Clears existing handlers
 logger.setLevel(logging.INFO)
 
-if logger.hasHandlers():
-    logger.handlers.clear()
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+logger.addHandler(handler)
 
-log_handler = logging.StreamHandler(sys.stdout)
-log_handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-log_handler.setFormatter(formatter)
-logger.addHandler(log_handler)
 
 # Force line-buffering or manually flush
 try:
@@ -50,8 +32,7 @@ try:
     if isinstance(sys.stderr, io.TextIOWrapper):
         sys.stderr.reconfigure(line_buffering=True)
 except AttributeError:
-    sys.stdout = Unbuffered(sys.stdout)  # type: ignore
-    sys.stderr = Unbuffered(sys.stderr)  # type: ignore
+    pass
 
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
@@ -127,33 +108,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Process regular request
         response = handler(event, context)
         
-        # Ensure response is properly formatted
-        if not isinstance(response, dict):
-            response = {
-                "statusCode": 200,
-                "body": json.dumps(response),
-                "headers": {"Content-Type": "application/json"}
-            }
-        
-        # Merge and properly case headers (API Gateway is case-sensitive)
-        final_headers = {
-            "Content-Type": "application/json",
-            **cors_headers,
-            **response.get("headers", {})
-        }
-        
+        # Always assume response is dict (Mangum ensures this)
+        response_headers = {**cors_headers, **response.get("headers", {})}
+
         return {
             "statusCode": response.get("statusCode", 200),
-            "headers": final_headers,
+            "headers": response_headers,
             "body": response.get("body", "")
         }
 
     except Exception as e:
+        logger.exception("Unhandled exception in lambda_handler")
         return {
             "statusCode": 500,
-            "headers": {
-                "Content-Type": "application/json",
-                **cors_headers
-            },
+            "headers": cors_headers,
             "body": json.dumps({"error": str(e)})
         }
