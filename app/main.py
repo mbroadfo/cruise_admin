@@ -88,7 +88,7 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
     delete_user(user.get("user_id"))
     return StandardResponse(success=True, message="User deleted successfully")
 
-handler: Callable[[Dict[str, Any], Any], Dict[str, Any]] = Mangum(app)
+handler = Mangum(app)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Initialize logging first
