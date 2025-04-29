@@ -104,17 +104,6 @@ resource "aws_lambda_function" "app" {
 }
 
 #------------------------------------------
-# Lambda permissions to allow API Gateway
-#------------------------------------------
-resource "aws_lambda_permission" "allow_apigw" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.app.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
-}
-
-#------------------------------------------
 # API Gateway REST API
 #------------------------------------------
 resource "aws_api_gateway_rest_api" "api" {
@@ -365,8 +354,6 @@ resource "aws_api_gateway_deployment" "deploy" {
     redeployment = sha1(jsonencode([
       timestamp(),
       aws_api_gateway_integration.lambda_integration.id,
-      aws_api_gateway_integration.post_integration.id,
-      aws_api_gateway_integration.delete_integration.id,
       aws_api_gateway_method.get_users.id,
       aws_api_gateway_method.post_method.id,
       aws_api_gateway_method.delete_method.id
@@ -435,7 +422,7 @@ resource "aws_api_gateway_account" "this" {
 }
 
 #------------------------------------------
-# IAM Role - API Gateway Cloudwatcy Role
+# IAM Role - API Gateway Cloudwatch Role
 #------------------------------------------
 resource "aws_iam_role" "apigateway_cloudwatch_role" {
   name = "${var.app_name}-apigw-cloudwatch-role"
