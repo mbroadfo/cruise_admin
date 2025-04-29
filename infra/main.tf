@@ -224,7 +224,7 @@ resource "aws_api_gateway_method" "post_method" {
 }
 
 #------------------------------------------
-# API Gateway - POST method integration
+# API Gateway - POST integration
 #------------------------------------------
 resource "aws_api_gateway_integration" "post_integration" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
@@ -262,7 +262,7 @@ resource "aws_api_gateway_method" "delete_method" {
 }
 
 #------------------------------------------
-# API Gateway - DELETE method integration
+# API Gateway - DELETE integration
 #------------------------------------------
 resource "aws_api_gateway_integration" "delete_integration" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
@@ -354,6 +354,8 @@ resource "aws_api_gateway_deployment" "deploy" {
     redeployment = sha1(jsonencode([
       timestamp(),
       aws_api_gateway_integration.lambda_integration.id,
+      aws_api_gateway_integration.post_integration.id,
+      aws_api_gateway_integration.delete_integration.id,
       aws_api_gateway_method.get_users.id,
       aws_api_gateway_method.post_method.id,
       aws_api_gateway_method.delete_method.id
