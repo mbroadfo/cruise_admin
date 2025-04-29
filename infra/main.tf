@@ -183,12 +183,16 @@ resource "aws_api_gateway_integration" "lambda_integration" {
 
 resource "aws_api_gateway_deployment" "deploy" {
   rest_api_id = aws_api_gateway_rest_api.api.id
+  
   triggers = {
     redeployment = sha1(jsonencode([
-      timestamp(),  # Forces redeploy every time
-      file("main.py")  # Also redeploy when code changes
+      timestamp(),  # Always changes
+      aws_api_gateway_integration.lambda_integration.id,
+      aws_api_gateway_method.get_users.id,
+      aws_api_gateway_method.options_users.id
     ]))
   }
+
   lifecycle {
     create_before_destroy = true
   }

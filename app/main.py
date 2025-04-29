@@ -11,7 +11,6 @@ import json
 import logging
 import sys
 import io
-import traceback
 
 if TYPE_CHECKING:
     from typing import Callable
