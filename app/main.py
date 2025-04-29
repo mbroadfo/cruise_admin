@@ -10,29 +10,31 @@ from typing import Any, Dict, TYPE_CHECKING, TextIO
 import json
 import logging
 import sys
-import io
+import traceback
+from logging.handlers import RotatingFileHandler
 
 if TYPE_CHECKING:
     from typing import Callable
 
-# Setup logging
-logger = logging.getLogger()
-logger.handlers.clear()  # Clears existing handlers
-logger.setLevel(logging.INFO)
+# Clear any existing handlers
+root = logging.getLogger()
+if root.handlers:
+    for handler in root.handlers:
+        root.removeHandler(handler)
 
-handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
-logger.addHandler(handler)
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),  # Sends to CloudWatch
+        logging.StreamHandler(sys.stderr)   # Duplicate to stderr for safety
+    ]
+)
+logger = logging.getLogger(__name__)
 
-
-# Force line-buffering or manually flush
-try:
-    if isinstance(sys.stdout, io.TextIOWrapper):
-        sys.stdout.reconfigure(line_buffering=True)
-    if isinstance(sys.stderr, io.TextIOWrapper):
-        sys.stderr.reconfigure(line_buffering=True)
-except AttributeError:
-    pass
+# Force immediate flush
+logger.handlers[0].flush()
 
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
@@ -89,38 +91,62 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
 handler = Mangum(app)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    # Define CORS headers
+    # Initialize logging first
+    logger.info("🔵 Lambda invocation started")
+    logger.debug(f"Raw event: {json.dumps(event, indent=2)}")
+    
+    # Define CORS headers (moved to top)
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
+        "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE", 
         "Access-Control-Allow-Headers": "Authorization,Content-Type"
     }
-    
+
     try:
+        logger.info("📥 Processing request...")
+        
         # Handle OPTIONS preflight
         if event.get("httpMethod") == "OPTIONS":
+            logger.info("Handling OPTIONS preflight")
             return {
                 "statusCode": 200,
                 "headers": cors_headers,
                 "body": ""
             }
 
-        # Process regular request
+        # Process regular request through Mangum
         response = handler(event, context)
+        logger.info(f"📤 Handler response: {json.dumps(response, indent=2)}")
         
-        # Always assume response is dict (Mangum ensures this)
-        response_headers = {**cors_headers, **response.get("headers", {})}
+        # Ensure proper response format
+        if not isinstance(response, dict):
+            logger.warning("Received non-dict response from handler")
+            response = {
+                "statusCode": 200,
+                "body": json.dumps(response),
+                "headers": {"Content-Type": "application/json"}
+            }
+        
+        # Merge headers (preserve existing headers from handler)
+        final_headers = {
+            "Content-Type": "application/json",
+            **cors_headers,
+            **response.get("headers", {})
+        }
 
         return {
             "statusCode": response.get("statusCode", 200),
-            "headers": response_headers,
+            "headers": final_headers,
             "body": response.get("body", "")
         }
 
     except Exception as e:
-        logger.exception("Unhandled exception in lambda_handler")
+        logger.exception(f"💥 Handler crashed: {str(e)}")
         return {
             "statusCode": 500,
-            "headers": cors_headers,
-            "body": json.dumps({"error": str(e)})
+            "headers": {**cors_headers, "Content-Type": "application/json"},
+            "body": json.dumps({
+                "error": str(e),
+                "stacktrace": traceback.format_exc()
+            })
         }

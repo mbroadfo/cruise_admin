@@ -27,3 +27,9 @@ variable "auth0_domain" {
   type        = string
   default     = "dev-jdsnf3lqod8nxlnv.us.auth0.com"
 }
+
+variable "allowed_ips" {
+  description = "List of IPs allowed to access the API"
+  type        = list(string)
+  default     = ["0.0.0.0/0"] # Allow all by default (restrict for production)
+}
