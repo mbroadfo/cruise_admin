@@ -323,6 +323,17 @@ resource "aws_api_gateway_integration" "lambda_integration" {
 }
 
 #------------------------------------------
+# Lambda permission - allow API Gateway GET
+#------------------------------------------
+resource "aws_lambda_permission" "allow_apigw_get" {
+  statement_id  = "AllowAPIGatewayInvokeGet"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.app.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/GET/admin-api/users"
+}
+
+#------------------------------------------
 # Lambda permission - allow API Gateway POST
 #------------------------------------------
 resource "aws_lambda_permission" "allow_apigw_post" {
