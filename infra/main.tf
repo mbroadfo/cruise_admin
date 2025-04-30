@@ -104,6 +104,39 @@ resource "aws_lambda_function" "app" {
 }
 
 #------------------------------------------
+# API Gateway - GET users method
+#------------------------------------------
+resource "aws_api_gateway_method" "get_users" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.users.id
+  http_method   = "GET"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id
+}
+
+#------------------------------------------
+# API Gateway - POST user method
+#------------------------------------------
+resource "aws_api_gateway_method" "post_method" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.users.id
+  http_method   = "POST"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id
+}
+
+#------------------------------------------
+# API Gateway - DELETE user method
+#------------------------------------------
+resource "aws_api_gateway_method" "delete_method" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.users.id
+  http_method   = "DELETE"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id
+}
+
+#------------------------------------------
 # API Gateway REST API
 #------------------------------------------
 resource "aws_api_gateway_rest_api" "api" {
@@ -203,26 +236,6 @@ resource "aws_api_gateway_integration_response" "options_integration_response" {
   }
 }
 
-#-----------------------------------------------
-#  API Gateway - GET users method
-#-----------------------------------------------
-resource "aws_api_gateway_method" "get_users" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.users.id
-  http_method   = "GET"
-  authorization = "NONE"  # (or "AWS_IAM" / "COGNITO_USER_POOLS" / etc. if you want auth here later)
-}
-
-#-----------------------------------------------
-#  API Gateway - POST user method
-#-----------------------------------------------
-resource "aws_api_gateway_method" "post_method" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.users.id
-  http_method   = "POST"
-  authorization = "NONE"
-}
-
 #------------------------------------------
 # API Gateway - POST integration
 #------------------------------------------
@@ -249,16 +262,6 @@ resource "aws_api_gateway_method_response" "post_response" {
     "method.response.header.Access-Control-Allow-Methods" = true,
     "method.response.header.Access-Control-Allow-Headers" = true
   }
-}
-
-#-----------------------------------------------
-#  API Gateway - DELETE user method
-#-----------------------------------------------
-resource "aws_api_gateway_method" "delete_method" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.users.id
-  http_method   = "DELETE"
-  authorization = "NONE"
 }
 
 #------------------------------------------
@@ -475,4 +478,29 @@ resource "aws_iam_role_policy" "apigateway_cloudwatch_role_policy" {
       }
     ]
   })
+}
+
+#------------------------------------------
+# Auth0 JWT Validator Lambda Function
+#------------------------------------------
+resource "aws_lambda_function" "auth0_validator" {
+  function_name = "auth0-jwt-validator"
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  role          = aws_iam_role.lambda_exec.arn
+  filename      = "./auth0_validator.zip" # Provide your zipped validator code
+  timeout       = 5
+  memory_size   = 128
+}
+
+#------------------------------------------
+# API Gateway - Lambda TOKEN Authorizer (Auth0 Validator)
+#------------------------------------------
+resource "aws_api_gateway_authorizer" "auth0_lambda_authorizer" {
+  name                         = "auth0-lambda-authorizer"
+  rest_api_id                  = aws_api_gateway_rest_api.api.id
+  authorizer_uri                = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.auth0_validator.arn}/invocations"
+  authorizer_result_ttl_in_seconds = 300
+  type                         = "TOKEN"
+  identity_source              = "method.request.header.Authorization"
 }
