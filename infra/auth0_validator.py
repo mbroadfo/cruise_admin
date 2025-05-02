@@ -43,7 +43,7 @@ def handler(event, context):
                 "Statement": [{
                     "Action": "execute-api:Invoke",
                     "Effect": "Allow",
-                    "Resource": event["methodArn"]
+                    "Resource": event["methodArn"].rsplit("/", 1)[0] + "/*"
                 }]
             },
             "context": sanitized_context,
