@@ -1,3 +1,7 @@
+#====================================== SETUP (data & locals) ===================================================
+# Core Terraform configuration and shared variables
+#================================================================================================================
+
 #------------------------------------------
 # Data Sources
 #------------------------------------------
@@ -10,6 +14,10 @@ data "aws_region" "current" {}
 locals {
   image_uri = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/${var.ecr_repo_name}:${var.image_tag}"
 }
+
+#===================================== ECR ======================================================================
+# Docker image repository for Lambda container images
+#================================================================================================================
 
 #------------------------------------------
 # ECR Repository
@@ -37,6 +45,10 @@ resource "aws_ecr_repository_policy" "repo_policy" {
     }]
   })
 }
+
+#======================================== IAM ===================================================================
+# AWS Identity & Access Management roles and policies
+#================================================================================================================
 
 #------------------------------------------
 # IAM Role and Policies
@@ -85,6 +97,88 @@ resource "aws_iam_role_policy_attachment" "lambda_secrets_attach" {
   policy_arn = aws_iam_policy.lambda_secrets_access.arn
 }
 
+
+#------------------------------------------
+# API Gateway - IAM Role for Lambda Authorizer
+#------------------------------------------
+resource "aws_iam_role" "api_gateway_auth_lambda" {
+  name = "lambda-jwt-auth-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        Service = "apigateway.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+#------------------------------------------
+# API Gateway - IAM Role Policy Invoke Auth Lambda
+#------------------------------------------
+resource "aws_iam_role_policy" "invoke_auth_lambda" {
+  name = "invoke-auth0-validator"
+  role = aws_iam_role.api_gateway_auth_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Action = "lambda:InvokeFunction",
+      Resource = "arn:aws:lambda:us-west-2:491696534851:function:auth0-jwt-validator"
+    }]
+  })
+}
+
+#------------------------------------------
+# IAM Role - API Gateway Cloudwatch Role
+#------------------------------------------
+resource "aws_iam_role" "apigateway_cloudwatch_role" {
+  name = "${var.app_name}-apigw-cloudwatch-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        Service = "apigateway.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+#------------------------------------------
+# IAM Policy - API Gateway Cloudwatch role policy
+#------------------------------------------
+resource "aws_iam_role_policy" "apigateway_cloudwatch_role_policy" {
+  name = "${var.app_name}-apigw-cloudwatch-policy"
+  role = aws_iam_role.apigateway_cloudwatch_role.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:GetLogEvents",
+          "logs:FilterLogEvents",
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+#===================================== LAMBDA ===================================================================
+# AWS Lambda function configurations
+#================================================================================================================
 #------------------------------------------
 # Lambda Function
 #------------------------------------------
@@ -100,10 +194,151 @@ resource "aws_lambda_function" "app" {
     command = ["app.main.lambda_handler"]  # 👈 Custom handler
   }
   lifecycle {
-    ignore_changes = [image_uri]
+    ignore_changes = [image_uri]  # Prevent Terraform from overwriting during CI/CD
   }
 
   depends_on = [aws_ecr_repository.repo, aws_ecr_repository_policy.repo_policy]
+}
+
+#------------------------------------------
+# Auth0 JWT Validator Lambda Function
+#------------------------------------------
+resource "aws_lambda_function" "auth0_validator" {
+  function_name = "auth0-jwt-validator"
+  handler       = "auth0_validator.handler"
+  runtime       = "python3.11"
+  role          = aws_iam_role.lambda_exec.arn
+  filename      = "./auth0_validator.zip"
+  source_code_hash = filebase64sha256("./auth0_validator.zip")
+  timeout       = 5
+  memory_size   = 128
+}
+
+#==================================== LAMBDA PERMISSIONS ========================================================
+# Cross-service permissions allowing API Gateway to invoke Lambda functions
+#================================================================================================================
+
+#------------------------------------------
+# Lambda permission - allow API Gateway GET
+#------------------------------------------
+resource "aws_lambda_permission" "allow_apigw_get" {
+  statement_id  = "AllowAPIGatewayInvokeGet"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.app.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/GET/admin-api/users"
+}
+
+#------------------------------------------
+# Lambda permission - allow API Gateway POST
+#------------------------------------------
+resource "aws_lambda_permission" "allow_apigw_post" {
+  statement_id  = "AllowAPIGatewayInvokePost"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.app.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/POST/admin-api/users"
+}
+
+#------------------------------------------
+# Lambda permission - allow API Gateway DELETE
+#------------------------------------------
+resource "aws_lambda_permission" "allow_apigw_delete" {
+  statement_id  = "AllowAPIGatewayInvokeDelete"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.app.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/DELETE/admin-api/users"
+}
+#------------------------------------------
+# API Gateway - Lambda Permission
+#------------------------------------------
+resource "aws_lambda_permission" "allow_apigw_invoke" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.app.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "arn:aws:execute-api:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.api.id}/*/*/*"
+}
+
+#------------------------------------------
+# API Gateway - Lambda Permission Invoke Validator
+#------------------------------------------
+resource "aws_lambda_permission" "allow_apigw_invoke_validator" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.auth0_validator.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*"
+}
+
+#================================ API GATEWAY - Core API Configuration ==========================================
+# Root API setup including policy controls and base configuration
+#================================================================================================================
+
+#------------------------------------------
+# API Gateway REST API
+#------------------------------------------
+resource "aws_api_gateway_rest_api" "api" {
+  name        = "${var.app_name}-api"
+  description = "Cruise Admin REST API"
+}
+
+#-----------------------------------------------
+# API Gateway - resource policy
+#-----------------------------------------------
+resource "aws_api_gateway_rest_api_policy" "api_policy" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = "*",
+      Action = "execute-api:Invoke",
+      Resource = "${aws_api_gateway_rest_api.api.execution_arn}/*",
+      Condition = {
+        IpAddress = {
+          "aws:SourceIp" = var.allowed_ips  # Define in variables.tf
+        }
+      }
+    }]
+  })
+}
+
+#================================ API GATEWAY - Resource Structure ==============================================
+# Path routing definitions (admin-api/users endpoints and hierarchy)
+#================================================================================================================
+
+#------------------------------------------
+# API Gateway - Admin API
+#------------------------------------------
+resource "aws_api_gateway_resource" "admin_api" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_rest_api.api.root_resource_id
+  path_part   = "admin-api"
+}
+
+#------------------------------------------
+# API Gateway - users route
+#------------------------------------------
+resource "aws_api_gateway_resource" "users" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_resource.admin_api.id
+  path_part   = "users"
+}
+
+#================================ API GATEWAY - Method Definitions ==============================================
+# HTTP verb implementations with Auth0 JWT authorization requirements
+#================================================================================================================
+
+#------------------------------------------
+# API Gateway - users options route
+#------------------------------------------
+resource "aws_api_gateway_method" "options_users" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.users.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
 }
 
 #------------------------------------------
@@ -114,7 +349,7 @@ resource "aws_api_gateway_method" "get_users" {
   resource_id   = aws_api_gateway_resource.users.id
   http_method   = "GET"
   authorization = "CUSTOM"
-  authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id
+  authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id 
 }
 
 
@@ -140,69 +375,9 @@ resource "aws_api_gateway_method" "delete_method" {
   authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id
 }
 
-#------------------------------------------
-# API Gateway REST API
-#------------------------------------------
-resource "aws_api_gateway_rest_api" "api" {
-  name        = "${var.app_name}-api"
-  description = "Cruise Admin REST API"
-}
-
-#------------------------------------------
-# API Gateway - Admin API
-#------------------------------------------
-resource "aws_api_gateway_resource" "admin_api" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  parent_id   = aws_api_gateway_rest_api.api.root_resource_id
-  path_part   = "admin-api"
-}
-
-#------------------------------------------
-# API Gateway - users route
-#------------------------------------------
-resource "aws_api_gateway_resource" "users" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  parent_id   = aws_api_gateway_resource.admin_api.id
-  path_part   = "users"
-}
-
-#------------------------------------------
-# API Gateway - GET method response
-#------------------------------------------
-resource "aws_api_gateway_method_response" "get_response" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.users.id
-  http_method = aws_api_gateway_method.get_users.http_method
-  status_code = "200"
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = true,
-    "method.response.header.Access-Control-Allow-Methods" = true,
-    "method.response.header.Access-Control-Allow-Headers" = true
-  }
-}
-
-#------------------------------------------
-# API Gateway - users options route
-#------------------------------------------
-resource "aws_api_gateway_method" "options_users" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.users.id
-  http_method   = "OPTIONS"
-  authorization = "NONE"
-}
-
-#------------------------------------------
-# API Gateway - options integration
-#------------------------------------------
-resource "aws_api_gateway_integration" "options_integration" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.users.id
-  http_method = aws_api_gateway_method.options_users.http_method
-
-  type                 = "MOCK"
-  request_templates    = { "application/json" = "{\"statusCode\": 200}" }
-}
+#================================ API GATEWAY - Method Responses ================================================
+# Status code declarations and CORS header configurations
+#================================================================================================================
 
 #------------------------------------------
 # API Gateway - options response
@@ -223,6 +398,110 @@ resource "aws_api_gateway_method_response" "options_response" {
     "application/json" = "Empty"
   }
 }
+
+#------------------------------------------
+# API Gateway - GET method response
+#------------------------------------------
+resource "aws_api_gateway_method_response" "get_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.get_users.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Headers" = true
+  }
+}
+
+#------------------------------------------
+# API Gateway - POST method response
+#------------------------------------------
+resource "aws_api_gateway_method_response" "post_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.post_method.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Headers" = true
+  }
+}
+
+#------------------------------------------
+# API Gateway - DELETE Response
+#------------------------------------------
+resource "aws_api_gateway_method_response" "delete_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.delete_method.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Headers" = true
+  }
+}
+
+#================================ API GATEWAY - Integrations ====================================================
+# Lambda proxy connections and MOCK implementations for OPTIONS
+#================================================================================================================
+
+#------------------------------------------
+# API Gateway - options integration
+#------------------------------------------
+resource "aws_api_gateway_integration" "options_integration" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.options_users.http_method
+
+  type                 = "MOCK"
+  request_templates    = { "application/json" = "{\"statusCode\": 200}" }
+}
+
+#-----------------------------------------------
+#  API Gateway - Lambda Integration
+#-----------------------------------------------
+resource "aws_api_gateway_integration" "lambda_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.users.id
+  http_method             = aws_api_gateway_method.get_users.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"  # Must be PROXY to pass headers
+  uri                     = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
+}
+
+#------------------------------------------
+# API Gateway - POST integration
+#------------------------------------------
+resource "aws_api_gateway_integration" "post_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.users.id
+  http_method             = aws_api_gateway_method.post_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
+}
+
+#------------------------------------------
+# API Gateway - DELETE integration
+#------------------------------------------
+resource "aws_api_gateway_integration" "delete_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.users.id
+  http_method             = aws_api_gateway_method.delete_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
+}
+
+#================================ API GATEWAY - Integration Responses ===========================================
+# Response header transformations and CORS permission mappings
+#================================================================================================================
 
 #------------------------------------------
 # API Gateway - options integration response
@@ -294,127 +573,56 @@ resource "aws_api_gateway_integration_response" "delete_integration_response" {
   depends_on = [aws_api_gateway_method_response.delete_response]
 }
 
+#================================ API GATEWAY - Authorizer  =====================================================
+# Auth0 token validation service and credential configuration
+#================================================================================================================
+
 #------------------------------------------
-# API Gateway - POST integration
+# API Gateway - Lambda TOKEN Authorizer (Auth0 Validator)
 #------------------------------------------
-resource "aws_api_gateway_integration" "post_integration" {
-  rest_api_id             = aws_api_gateway_rest_api.api.id
-  resource_id             = aws_api_gateway_resource.users.id
-  http_method             = aws_api_gateway_method.post_method.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
+resource "aws_api_gateway_authorizer" "auth0_lambda_authorizer" {
+  name                         = "auth0-lambda-authorizer"
+  rest_api_id                  = aws_api_gateway_rest_api.api.id
+  authorizer_uri                = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.auth0_validator.arn}/invocations"
+  authorizer_result_ttl_in_seconds = 300
+  type                         = "TOKEN"
+  identity_source              = "method.request.header.Authorization"
+  authorizer_credentials       = aws_iam_role.api_gateway_auth_lambda.arn  
+}
+
+#================================= CLOUDWATCH ===================================================================
+# Monitoring and logging resources
+#================================================================================================================
+
+#------------------------------------------
+# CloudWatch Logging on API Gateway Account
+#------------------------------------------
+resource "aws_api_gateway_account" "this" {
+  cloudwatch_role_arn = aws_iam_role.apigateway_cloudwatch_role.arn
 }
 
 #------------------------------------------
-# API Gateway - POST method response
+# CloudWatch Log Group for API Gateway
 #------------------------------------------
-resource "aws_api_gateway_method_response" "post_response" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.users.id
-  http_method = aws_api_gateway_method.post_method.http_method
-  status_code = "200"
+resource "aws_cloudwatch_log_group" "api_gw_logs" {
+  name              = "/aws/apigateway/${var.app_name}-access"
+  retention_in_days = 7
+}
 
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = true,
-    "method.response.header.Access-Control-Allow-Methods" = true,
-    "method.response.header.Access-Control-Allow-Headers" = true
+#------------------------------------------
+# CloudWatch Log Group for Lambda
+#------------------------------------------
+resource "aws_cloudwatch_log_group" "lambda_logs" {
+  name              = "/aws/lambda/${var.app_name}"
+  retention_in_days = 7
+  lifecycle {
+    prevent_destroy = true
   }
 }
 
-#------------------------------------------
-# API Gateway - DELETE integration
-#------------------------------------------
-resource "aws_api_gateway_integration" "delete_integration" {
-  rest_api_id             = aws_api_gateway_rest_api.api.id
-  resource_id             = aws_api_gateway_resource.users.id
-  http_method             = aws_api_gateway_method.delete_method.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
-}
-
-#------------------------------------------
-# API Gateway - DELETE Response
-#------------------------------------------
-resource "aws_api_gateway_method_response" "delete_response" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.users.id
-  http_method = aws_api_gateway_method.delete_method.http_method
-  status_code = "200"
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = true,
-    "method.response.header.Access-Control-Allow-Methods" = true,
-    "method.response.header.Access-Control-Allow-Headers" = true
-  }
-}
-
-#-----------------------------------------------
-# API Gateway - resource policy
-#-----------------------------------------------
-resource "aws_api_gateway_rest_api_policy" "api_policy" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Principal = "*",
-      Action = "execute-api:Invoke",
-      Resource = "${aws_api_gateway_rest_api.api.execution_arn}/*",
-      Condition = {
-        IpAddress = {
-          "aws:SourceIp" = var.allowed_ips  # Define in variables.tf
-        }
-      }
-    }]
-  })
-}
-
-#-----------------------------------------------
-#  API Gateway - Lambda Integration
-#-----------------------------------------------
-resource "aws_api_gateway_integration" "lambda_integration" {
-  rest_api_id             = aws_api_gateway_rest_api.api.id
-  resource_id             = aws_api_gateway_resource.users.id
-  http_method             = aws_api_gateway_method.get_users.http_method
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"  # Must be PROXY to pass headers
-  uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
-}
-
-#------------------------------------------
-# Lambda permission - allow API Gateway GET
-#------------------------------------------
-resource "aws_lambda_permission" "allow_apigw_get" {
-  statement_id  = "AllowAPIGatewayInvokeGet"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.app.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/GET/admin-api/users"
-}
-
-#------------------------------------------
-# Lambda permission - allow API Gateway POST
-#------------------------------------------
-resource "aws_lambda_permission" "allow_apigw_post" {
-  statement_id  = "AllowAPIGatewayInvokePost"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.app.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/POST/admin-api/users"
-}
-
-#------------------------------------------
-# Lambda permission - allow API Gateway DELETE
-#------------------------------------------
-resource "aws_lambda_permission" "allow_apigw_delete" {
-  statement_id  = "AllowAPIGatewayInvokeDelete"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.app.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/DELETE/admin-api/users"
-}
+#================================= DEPLOYMENT ===================================================================
+# API Gateway stage deployment and logging setup
+#================================================================================================================
 
 #------------------------------------------
 # API Gateway - DEPLOYMENT TRIGGER
@@ -468,157 +676,4 @@ resource "aws_api_gateway_stage" "prod" {
   xray_tracing_enabled = true
 
   tags = {}
-}
-
-#------------------------------------------
-# CloudWatch Log Group for API Gateway
-#------------------------------------------
-resource "aws_cloudwatch_log_group" "api_gw_logs" {
-  name              = "/aws/apigateway/${var.app_name}-access"
-  retention_in_days = 7
-}
-
-#------------------------------------------
-# CloudWatch Log Group for Lambda
-#------------------------------------------
-resource "aws_cloudwatch_log_group" "lambda_logs" {
-  name              = "/aws/lambda/${var.app_name}"
-  retention_in_days = 7
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-#------------------------------------------
-# CloudWatch Logging on API Gateway Account
-#------------------------------------------
-resource "aws_api_gateway_account" "this" {
-  cloudwatch_role_arn = aws_iam_role.apigateway_cloudwatch_role.arn
-}
-
-#------------------------------------------
-# IAM Role - API Gateway Cloudwatch Role
-#------------------------------------------
-resource "aws_iam_role" "apigateway_cloudwatch_role" {
-  name = "${var.app_name}-apigw-cloudwatch-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Principal = {
-        Service = "apigateway.amazonaws.com"
-      },
-      Action = "sts:AssumeRole"
-    }]
-  })
-}
-
-#------------------------------------------
-# IAM Policy - API Gateway Cloudwatch role policy
-#------------------------------------------
-resource "aws_iam_role_policy" "apigateway_cloudwatch_role_policy" {
-  name = "${var.app_name}-apigw-cloudwatch-policy"
-  role = aws_iam_role.apigateway_cloudwatch_role.id
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams",
-          "logs:GetLogEvents",
-          "logs:FilterLogEvents",
-        ],
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-#------------------------------------------
-# Auth0 JWT Validator Lambda Function
-#------------------------------------------
-resource "aws_lambda_function" "auth0_validator" {
-  function_name = "auth0-jwt-validator"
-  handler       = "auth0_validator.handler"
-  runtime       = "python3.11"
-  role          = aws_iam_role.lambda_exec.arn
-  filename      = "./auth0_validator.zip"
-  source_code_hash = filebase64sha256("./auth0_validator.zip")
-  timeout       = 5
-  memory_size   = 128
-}
-
-#------------------------------------------
-# API Gateway - Lambda TOKEN Authorizer (Auth0 Validator)
-#------------------------------------------
-resource "aws_api_gateway_authorizer" "auth0_lambda_authorizer" {
-  name                         = "auth0-lambda-authorizer"
-  rest_api_id                  = aws_api_gateway_rest_api.api.id
-  authorizer_uri                = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.auth0_validator.arn}/invocations"
-  authorizer_result_ttl_in_seconds = 300
-  type                         = "TOKEN"
-  identity_source              = "method.request.header.Authorization"
-  authorizer_credentials       = aws_iam_role.api_gateway_auth_lambda.arn  
-}
-
-#------------------------------------------
-# API Gateway - IAM Role for Lambda Authorizer
-#------------------------------------------
-resource "aws_iam_role" "api_gateway_auth_lambda" {
-  name = "lambda-jwt-auth-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Principal = {
-        Service = "apigateway.amazonaws.com"
-      },
-      Action = "sts:AssumeRole"
-    }]
-  })
-}
-
-#------------------------------------------
-# API Gateway - IAM Role Policy Invoke Auth Lambda
-#------------------------------------------
-resource "aws_iam_role_policy" "invoke_auth_lambda" {
-  name = "invoke-auth0-validator"
-  role = aws_iam_role.api_gateway_auth_lambda.id
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Action = "lambda:InvokeFunction",
-      Resource = "arn:aws:lambda:us-west-2:491696534851:function:auth0-jwt-validator"
-    }]
-  })
-}
-
-#------------------------------------------
-# API Gateway - Lambda Permission
-#------------------------------------------
-resource "aws_lambda_permission" "allow_apigw_invoke" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.app.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "arn:aws:execute-api:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.api.id}/*/*/*"
-}
-
-#------------------------------------------
-# API Gateway - Lambda Permission Invoke Validator
-#------------------------------------------
-resource "aws_lambda_permission" "allow_apigw_invoke_validator" {
-  statement_id  = "AllowExecutionFromAPIGateway"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.auth0_validator.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*"
 }
