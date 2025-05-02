@@ -94,18 +94,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Initialize logging first
     logger.info("🔵 Lambda invocation started")
     logger.debug(f"Raw event: {json.dumps(event, indent=2)}")
-    
-    # Define CORS headers (moved to top)
+
+    # Default CORS headers
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE", 
+        "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
         "Access-Control-Allow-Headers": "Authorization,Content-Type"
     }
 
     try:
         logger.info("📥 Processing request...")
-        
-        # Handle OPTIONS preflight
+
         if event.get("httpMethod") == "OPTIONS":
             logger.info("Handling OPTIONS preflight")
             return {
@@ -114,32 +113,36 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "body": ""
             }
 
-        # Process regular request through Mangum
-        response = handler(event, context)
-        logger.info(f"📤 Handler response: {json.dumps(response, indent=2)}")
-        
-        # Ensure proper response format
-        if not isinstance(response, dict):
-            logger.warning("Received non-dict response from handler")
-            response = {
+        # Call Mangum and expect it to return a full API Gateway proxy response
+        proxy_response = handler(event, context)
+        logger.info(f"📤 Handler response from Mangum: {json.dumps(proxy_response, indent=2)}")
+
+        # Ensure we can work with a dict structure
+        if not isinstance(proxy_response, dict):
+            logger.warning("Mangum returned a non-dict response; wrapping manually.")
+            proxy_response = {
                 "statusCode": 200,
-                "body": json.dumps(response),
+                "body": json.dumps(proxy_response),
                 "headers": {"Content-Type": "application/json"}
             }
-        
-        # Merge headers (preserve existing headers from handler)
+
+        # Safely extract the fields
+        status_code = proxy_response.get("statusCode", 200)
+        body = proxy_response.get("body", "")
+        original_headers = proxy_response.get("headers", {})
+
+        # Merge CORS headers without nuking existing ones
         final_headers = {
-            "Content-Type": "application/json",
-            **cors_headers,
-            **response.get("headers", {})
+            **original_headers,
+            **cors_headers
         }
 
         logger.info(f"🧾 Final response headers: {json.dumps(final_headers, indent=2)}")
 
         return {
-            "statusCode": response.get("statusCode", 200),
+            "statusCode": status_code,
             "headers": final_headers,
-            "body": response.get("body", "")
+            "body": body
         }
 
     except Exception as e:
