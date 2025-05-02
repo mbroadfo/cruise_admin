@@ -31,7 +31,7 @@ def dump_python_files(directory: str, output_file: str) -> None:
 # Specify the directory containing your Python files and the output file
 project_directory = '.'  # Current directory
 output_directory = os.path.join(os.getcwd(), 'output')
-output_file = os.path.join(output_directory, 'combined_files.txt')
+output_file = os.path.join(output_directory, 'cruise_admin_dump.txt')
 
 # Combine the files
 dump_python_files(project_directory, output_file)

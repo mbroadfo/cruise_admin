@@ -114,6 +114,7 @@ resource "aws_api_gateway_method" "get_users" {
   authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id
 }
 
+
 #------------------------------------------
 # API Gateway - POST user method
 #------------------------------------------
@@ -485,7 +486,7 @@ resource "aws_iam_role_policy" "apigateway_cloudwatch_role_policy" {
 #------------------------------------------
 resource "aws_lambda_function" "auth0_validator" {
   function_name = "auth0-jwt-validator"
-  handler       = "index.handler"
+  handler       = "auth0_validator.handler"
   runtime       = "python3.11"
   role          = aws_iam_role.lambda_exec.arn
   filename      = "./auth0_validator.zip" # Provide your zipped validator code
@@ -503,4 +504,39 @@ resource "aws_api_gateway_authorizer" "auth0_lambda_authorizer" {
   authorizer_result_ttl_in_seconds = 300
   type                         = "TOKEN"
   identity_source              = "method.request.header.Authorization"
+}
+
+#------------------------------------------
+# API Gateway - IAM Role for Lambda Authorizer
+#------------------------------------------
+resource "aws_iam_role" "api_gateway_auth_lambda" {
+  name = "lambda-jwt-auth-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        Service = "apigateway.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+#------------------------------------------
+# API Gateway - IAM Role Policy Invoke Auth Lambda
+#------------------------------------------
+resource "aws_iam_role_policy" "invoke_auth_lambda" {
+  name = "invoke-auth0-validator"
+  role = aws_iam_role.api_gateway_auth_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Action = "lambda:InvokeFunction",
+      Resource = "arn:aws:lambda:us-west-2:491696534851:function:auth0-jwt-validator"
+    }]
+  })
 }
