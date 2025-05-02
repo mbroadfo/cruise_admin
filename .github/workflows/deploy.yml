@@ -33,3 +33,9 @@ jobs:
           docker build --platform linux/amd64 -t cruise-admin-api:latest .
           docker tag cruise-admin-api:latest 491696534851.dkr.ecr.us-west-2.amazonaws.com/cruise-admin-api:latest
           docker push 491696534851.dkr.ecr.us-west-2.amazonaws.com/cruise-admin-api:latest
+
+      - name: Redeploy Lambda with latest image
+        run: |
+          aws lambda update-function-code \
+            --function-name cruise-admin-api \
+            --image-uri 491696534851.dkr.ecr.us-west-2.amazonaws.com/cruise-admin-api:latest
