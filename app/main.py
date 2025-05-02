@@ -104,7 +104,6 @@ mangum_handler = Mangum(
 )
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    raise Exception("THIS SHOULD NEVER RUN") # Confirm this is skipped 
     """Your enhanced handler that properly wraps Mangum"""
     # Initialize logging (keep your existing setup)
     logger.info("🔵 Lambda invocation started")
