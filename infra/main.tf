@@ -96,6 +96,9 @@ resource "aws_lambda_function" "app" {
   timeout       = 30
   memory_size   = 512
 
+  image_config {
+    command = ["app.main.lambda_handler"]  # 👈 Custom handler
+  }
   lifecycle {
     ignore_changes = [image_uri]
   }
