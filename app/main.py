@@ -54,6 +54,14 @@ async def app_lifespan(app: FastAPI):
 # Setup FastAPI
 app = FastAPI(title="Cruise Admin API", version="0.1.0", lifespan=app_lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://da389rkfiajdk.cloudfront.net"],  # Use specific origin instead of "*"
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Start idle shutdown monitor
 threading.Thread(target=monitor_idle_shutdown, daemon=True).start()
 
