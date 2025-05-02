@@ -96,6 +96,7 @@ mangum_handler = Mangum(
 )
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    raise Exception("THIS SHOULD NEVER RUN") # Confirm this is skipped 
     """Your enhanced handler that properly wraps Mangum"""
     # Initialize logging (keep your existing setup)
     logger.info("🔵 Lambda invocation started")
@@ -104,8 +105,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # CORS headers - now only as fallback
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
-        "Access-Control-Allow-Headers": "Authorization,Content-Type"
+        "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token",
+        "Access-Control-Allow-Credentials": "true"
     }
 
     try:
