@@ -103,7 +103,7 @@ mangum_handler = Mangum(
     api_gateway_base_path="/prod"  # Add this if using API Gateway stages
 )
 
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     raise Exception("THIS SHOULD NEVER RUN") # Confirm this is skipped 
     """Your enhanced handler that properly wraps Mangum"""
     # Initialize logging (keep your existing setup)
