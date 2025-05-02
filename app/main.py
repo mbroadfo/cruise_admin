@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.shutdown import monitor_idle_shutdown, update_last_activity_middleware
 from admin.auth0_utils import get_all_users, create_user, send_password_reset_email, delete_user, find_user
 from admin.token_cache import get_auth0_mgmt_token
+from admin.auth0_utils import ensure_env_loaded
 import threading
 from mangum import Mangum
 from typing import Any, Dict, TYPE_CHECKING, Callable
@@ -11,6 +12,7 @@ import json
 import logging
 import sys
 import traceback
+from contextlib import asynccontextmanager
 
 
 if TYPE_CHECKING:
@@ -42,9 +44,15 @@ if not logger.handlers:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def app_lifespan(app: FastAPI):
+    # This runs on startup
+    ensure_env_loaded()
+    yield
+    # This runs on shutdown (optional)
 
 # Setup FastAPI
-app = FastAPI(title="Cruise Admin API", version="0.1.0")
+app = FastAPI(title="Cruise Admin API", version="0.1.0", lifespan=app_lifespan)
 
 # Allow CORS for frontend
 app.add_middleware(
@@ -71,12 +79,14 @@ async def log_requests(request: Request, call_next: Callable) -> Response:
 
 @app.get("/admin-api/users", response_model=StandardResponse)
 async def list_users_api() -> StandardResponse:
+    ensure_env_loaded()
     token = get_auth0_mgmt_token()
     users = get_all_users(token)
     return StandardResponse(success=True, message="Users listed successfully", data={"users": users})
 
 @app.post("/admin-api/users", response_model=StandardResponse)
 async def invite_user_api(payload: InviteUserRequest) -> StandardResponse:
+    ensure_env_loaded()
     token = get_auth0_mgmt_token()
     user = find_user(payload.email)
 
@@ -89,6 +99,7 @@ async def invite_user_api(payload: InviteUserRequest) -> StandardResponse:
 
 @app.delete("/admin-api/users", response_model=StandardResponse)
 async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
+    ensure_env_loaded()
     user = find_user(payload.email)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
