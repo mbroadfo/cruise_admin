@@ -246,7 +246,7 @@ resource "aws_api_gateway_integration" "post_integration" {
   http_method             = aws_api_gateway_method.post_method.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.app.invoke_arn
+  uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
 }
 
 #------------------------------------------
@@ -274,7 +274,7 @@ resource "aws_api_gateway_integration" "delete_integration" {
   http_method             = aws_api_gateway_method.delete_method.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.app.invoke_arn
+  uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
 }
 
 #------------------------------------------
@@ -323,7 +323,7 @@ resource "aws_api_gateway_integration" "lambda_integration" {
   http_method             = aws_api_gateway_method.get_users.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"  # Must be PROXY to pass headers
-  uri                     = aws_lambda_function.app.invoke_arn
+  uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
 }
 
 #------------------------------------------
@@ -403,7 +403,8 @@ resource "aws_api_gateway_stage" "prod" {
       status         = "$context.status",
       protocol       = "$context.protocol",
       responseLength = "$context.responseLength",
-      errorMessage   = "$context.error.message"
+      errorMessage   = "$context.error.message",
+      integrationErrorMessage = "$context.integration.error"
     })
   }
 
@@ -489,7 +490,8 @@ resource "aws_lambda_function" "auth0_validator" {
   handler       = "auth0_validator.handler"
   runtime       = "python3.11"
   role          = aws_iam_role.lambda_exec.arn
-  filename      = "./auth0_validator.zip" # Provide your zipped validator code
+  filename      = "./auth0_validator.zip"
+  source_code_hash = filebase64sha256("./auth0_validator.zip")
   timeout       = 5
   memory_size   = 128
 }
@@ -504,6 +506,7 @@ resource "aws_api_gateway_authorizer" "auth0_lambda_authorizer" {
   authorizer_result_ttl_in_seconds = 300
   type                         = "TOKEN"
   identity_source              = "method.request.header.Authorization"
+  authorizer_credentials       = aws_iam_role.api_gateway_auth_lambda.arn  
 }
 
 #------------------------------------------
@@ -539,4 +542,26 @@ resource "aws_iam_role_policy" "invoke_auth_lambda" {
       Resource = "arn:aws:lambda:us-west-2:491696534851:function:auth0-jwt-validator"
     }]
   })
+}
+
+#------------------------------------------
+# API Gateway - Lambda Permission
+#------------------------------------------
+resource "aws_lambda_permission" "allow_apigw_invoke" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.app.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "arn:aws:execute-api:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.api.id}/*/*/*"
+}
+
+#------------------------------------------
+# API Gateway - Lambda Permission Invoke Validator
+#------------------------------------------
+resource "aws_lambda_permission" "allow_apigw_invoke_validator" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.auth0_validator.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*"
 }
