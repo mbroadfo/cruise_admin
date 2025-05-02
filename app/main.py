@@ -88,14 +88,20 @@ async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
     delete_user(user.get("user_id"))
     return StandardResponse(success=True, message="User deleted successfully")
 
-handler = Mangum(app)
+# Initialize Mangum FIRST
+mangum_handler = Mangum(
+    app,
+    lifespan="off",
+    api_gateway_base_path="/prod"  # Add this if using API Gateway stages
+)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    # Initialize logging first
+    """Your enhanced handler that properly wraps Mangum"""
+    # Initialize logging (keep your existing setup)
     logger.info("🔵 Lambda invocation started")
     logger.debug(f"Raw event: {json.dumps(event, indent=2)}")
 
-    # Default CORS headers
+    # CORS headers - now only as fallback
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "OPTIONS,GET,POST,DELETE",
@@ -103,8 +109,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     }
 
     try:
-        logger.info("📥 Processing request...")
-
+        # Handle OPTIONS requests early
         if event.get("httpMethod") == "OPTIONS":
             logger.info("Handling OPTIONS preflight")
             return {
@@ -113,37 +118,26 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "body": ""
             }
 
-        # Call Mangum and expect it to return a full API Gateway proxy response
-        proxy_response = handler(event, context)
-        logger.info(f"📤 Handler response from Mangum: {json.dumps(proxy_response, indent=2)}")
-
-        # Ensure we can work with a dict structure
-        if not isinstance(proxy_response, dict):
-            logger.warning("Mangum returned a non-dict response; wrapping manually.")
-            proxy_response = {
+        # Let Mangum process the main request
+        response = mangum_handler(event, context)
+        
+        # Ensure response is properly formatted (Mangum should already do this)
+        if not isinstance(response, dict):
+            response = {
                 "statusCode": 200,
-                "body": json.dumps(proxy_response),
+                "body": json.dumps(response),
                 "headers": {"Content-Type": "application/json"}
             }
 
-        # Safely extract the fields
-        status_code = proxy_response.get("statusCode", 200)
-        body = proxy_response.get("body", "")
-        original_headers = proxy_response.get("headers", {})
-
-        # Merge CORS headers without nuking existing ones
-        final_headers = {
-            **original_headers,
-            **cors_headers
+        # Merge headers - preserving Mangum's headers first
+        response_headers = response.get("headers", {})
+        response["headers"] = {
+            **cors_headers,  # Start with CORS defaults
+            **response_headers  # Override with Mangum's headers
         }
 
-        logger.info(f"🧾 Final response headers: {json.dumps(final_headers, indent=2)}")
-
-        return {
-            "statusCode": status_code,
-            "headers": final_headers,
-            "body": body
-        }
+        logger.info(f"Final response: {json.dumps(response, indent=2)}")
+        return response
 
     except Exception as e:
         logger.exception(f"💥 Handler crashed: {str(e)}")
