@@ -134,6 +134,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             **response.get("headers", {})
         }
 
+        logger.info(f"🧾 Final response headers: {json.dumps(final_headers, indent=2)}")
+
         return {
             "statusCode": response.get("statusCode", 200),
             "headers": final_headers,

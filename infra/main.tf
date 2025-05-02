@@ -238,6 +238,60 @@ resource "aws_api_gateway_integration_response" "options_integration_response" {
 }
 
 #------------------------------------------
+# API Gateway = GET Integration Response
+#------------------------------------------
+resource "aws_api_gateway_integration_response" "get_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.get_users.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS'"
+  }
+
+  depends_on = [aws_api_gateway_method_response.get_response]
+}
+
+#------------------------------------------
+# API Gateway = POST Integration Response
+#------------------------------------------
+resource "aws_api_gateway_integration_response" "post_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.post_method.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS'"
+  }
+
+  depends_on = [aws_api_gateway_method_response.post_response]
+}
+
+#------------------------------------------
+# API Gateway = DELETE Integration Response
+#------------------------------------------
+resource "aws_api_gateway_integration_response" "delete_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.delete_method.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS'"
+  }
+
+  depends_on = [aws_api_gateway_method_response.delete_response]
+}
+
+#------------------------------------------
 # API Gateway - POST integration
 #------------------------------------------
 resource "aws_api_gateway_integration" "post_integration" {
