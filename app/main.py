@@ -34,8 +34,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Force immediate flush
-logger.handlers[0].flush()
+for h in logger.handlers:
+    h.flush()
 
+# Verify log setup
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+
+# Setup FastAPI
 app = FastAPI(title="Cruise Admin API", version="0.1.0")
 
 # Allow CORS for frontend
