@@ -54,15 +54,6 @@ async def app_lifespan(app: FastAPI):
 # Setup FastAPI
 app = FastAPI(title="Cruise Admin API", version="0.1.0", lifespan=app_lifespan)
 
-# Allow CORS for frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Start idle shutdown monitor
 threading.Thread(target=monitor_idle_shutdown, daemon=True).start()
 
@@ -120,21 +111,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     logger.info("🔵 Lambda invocation started")
     logger.debug(f"Raw event: {json.dumps(event, indent=2)}")
 
-    # CORS headers - now only as fallback
-    cors_headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token",
-        "Access-Control-Allow-Credentials": "true"
-    }
-
     try:
         # Handle OPTIONS requests early
         if event.get("httpMethod") == "OPTIONS":
             logger.info("Handling OPTIONS preflight")
             return {
                 "statusCode": 200,
-                "headers": cors_headers,
                 "body": ""
             }
 
@@ -152,7 +134,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Merge headers - preserving Mangum's headers first
         response_headers = response.get("headers", {})
         response["headers"] = {
-            **cors_headers,  # Start with CORS defaults
             **response_headers  # Override with Mangum's headers
         }
 
@@ -163,7 +144,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.exception(f"💥 Handler crashed: {str(e)}")
         return {
             "statusCode": 500,
-            "headers": {**cors_headers, "Content-Type": "application/json"},
             "body": json.dumps({
                 "error": str(e),
                 "stacktrace": traceback.format_exc()
