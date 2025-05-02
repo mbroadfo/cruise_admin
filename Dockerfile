@@ -15,4 +15,4 @@ COPY app/ ./app/
 COPY admin/ ./admin/
 
 # Tell Lambda which handler to call (we'll explain below)
-CMD ["app.main.handler"]
+CMD ["main.lambda.handler"]
