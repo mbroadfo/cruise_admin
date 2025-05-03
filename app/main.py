@@ -18,29 +18,6 @@ from contextlib import asynccontextmanager
 if TYPE_CHECKING:
     from typing import Callable
 
-# Clear any existing handlers
-logger = logging.getLogger("app.main")
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),  # Sends to CloudWatch
-        logging.StreamHandler(sys.stderr)   # Duplicate to stderr for safety
-    ]
-)
-logger = logging.getLogger(__name__)
-
-# Force immediate flush
-for h in logger.handlers:
-    h.flush()
-
-# Verify log setup
-if not logger.handlers:
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     # This runs on startup
@@ -68,11 +45,9 @@ async def last_activity_tracker(request: Request, call_next: Callable) -> Respon
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next: Callable) -> Response:
-    logger.info(f"📥 Incoming request: {request.method} {request.url.path}")
-    sys.stdout.flush()
+    print(f"📥 Incoming request: {request.method} {request.url.path}")
     response = await call_next(request)
-    logger.info(f"📤 Completed {request.method} {request.url.path} with status {response.status_code}")
-    sys.stdout.flush()
+    print(f"📤 Completed {request.method} {request.url.path} with status {response.status_code}")
     return response
 
 @app.get("/admin-api/users", response_model=StandardResponse)
@@ -115,9 +90,7 @@ mangum_handler = Mangum(
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Your enhanced handler that properly wraps Mangum"""
     # Initialize logging (keep your existing setup)
-    logger.info(f"🔵 Lambda handler invoked: {event.get('httpMethod')} {event.get('path')}")
-    sys.stdout.flush()
-    print(f"🔥 Reached lambda_handler for {event.get('httpMethod')} {event.get('path')}")
+    print(f"🔥 Lambda handler invoked: {event.get('httpMethod')} {event.get('path')}")
 
     try:
         # Handle OPTIONS requests early
@@ -144,12 +117,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             **response_headers  # Override with Mangum's headers
         }
 
-        logger.debug(f"Final status: {response['statusCode']}, body: {str(response['body'])[:200]}...")
+        print(f"Final status: {response['statusCode']}, body: {str(response['body'])[:200]}...")
         return response
 
     except Exception as e:
-        logger.exception(f"💥 Handler crashed: {str(e)}")
-        sys.stdout.flush()
+        print.exception(f"💥 Handler crashed: {str(e)}")
         return {
             "statusCode": 500,
             "body": json.dumps({
