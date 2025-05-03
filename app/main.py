@@ -113,7 +113,7 @@ mangum_handler = Mangum(
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Your enhanced handler that properly wraps Mangum"""
     # Initialize logging (keep your existing setup)
-    logger.info("🔵 Lambda invocation started")
+    logger.info(f"🔵 Lambda handler invoked: {event.get('httpMethod')} {event.get('path')}")
 
     try:
         # Handle OPTIONS requests early
