@@ -44,12 +44,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 allowed = True
                 break
             elif required == "admin":
-                roles = decoded.get("https://cruise-viewer.app/roles", {}).get("role", [])
-                if isinstance(roles, str):
-                    roles = [roles]
+                # Fix role extraction logic
+                roles_claim = decoded.get("https://cruise-viewer.app/roles")
+                roles = []
+
+                if isinstance(roles_claim, dict):
+                    roles = roles_claim.get("role", [])
+                elif isinstance(roles_claim, list):
+                    roles = roles_claim
+                elif isinstance(roles_claim, str):
+                    roles = [roles_claim]
+
                 if "admin" in roles:
                     allowed = True
-                    break
 
         if not allowed:
             raise Exception("User not authorized for this audience")
