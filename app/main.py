@@ -109,3 +109,46 @@ mangum_handler = Mangum(
     lifespan="off",
     api_gateway_base_path="/prod"  # Add this if using API Gateway stages
 )
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Your enhanced handler that properly wraps Mangum"""
+    # Initialize logging (keep your existing setup)
+    logger.info(f"🔵 Lambda handler invoked: {event.get('httpMethod')} {event.get('path')}")
+
+    try:
+        # Handle OPTIONS requests early
+        if event.get("httpMethod") == "OPTIONS":
+            return {
+                "statusCode": 200,
+                "body": ""
+            }
+
+        # Let Mangum process the main request
+        response = mangum_handler(event, context)
+        
+        # Ensure response is properly formatted (Mangum should already do this)
+        if not isinstance(response, dict):
+            response = {
+                "statusCode": 200,
+                "body": json.dumps(response),
+                "headers": {"Content-Type": "application/json"}
+            }
+
+        # Merge headers - preserving Mangum's headers first
+        response_headers = response.get("headers", {})
+        response["headers"] = {
+            **response_headers  # Override with Mangum's headers
+        }
+
+        logger.debug(f"Final status: {response['statusCode']}, body: {str(response['body'])[:200]}...")
+        return response
+
+    except Exception as e:
+        logger.exception(f"💥 Handler crashed: {str(e)}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": str(e),
+                "stacktrace": traceback.format_exc()
+            })
+        }
