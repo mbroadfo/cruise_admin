@@ -117,6 +117,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Initialize logging (keep your existing setup)
     logger.info(f"🔵 Lambda handler invoked: {event.get('httpMethod')} {event.get('path')}")
     sys.stdout.flush()
+    print(f"🔥 Reached lambda_handler for {event.get('httpMethod')} {event.get('path')}")
 
     try:
         # Handle OPTIONS requests early
