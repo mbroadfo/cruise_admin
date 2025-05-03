@@ -57,6 +57,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
                 if "admin" in roles:
                     allowed = True
+                    break
 
         if not allowed:
             raise Exception("User not authorized for this audience")
