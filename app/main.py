@@ -69,8 +69,10 @@ async def last_activity_tracker(request: Request, call_next: Callable) -> Respon
 @app.middleware("http")
 async def log_requests(request: Request, call_next: Callable) -> Response:
     logger.info(f"📥 Incoming request: {request.method} {request.url.path}")
+    sys.stdout.flush()
     response = await call_next(request)
     logger.info(f"📤 Completed {request.method} {request.url.path} with status {response.status_code}")
+    sys.stdout.flush()
     return response
 
 @app.get("/admin-api/users", response_model=StandardResponse)
@@ -114,6 +116,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Your enhanced handler that properly wraps Mangum"""
     # Initialize logging (keep your existing setup)
     logger.info(f"🔵 Lambda handler invoked: {event.get('httpMethod')} {event.get('path')}")
+    sys.stdout.flush()
 
     try:
         # Handle OPTIONS requests early
@@ -145,6 +148,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     except Exception as e:
         logger.exception(f"💥 Handler crashed: {str(e)}")
+        sys.stdout.flush()
         return {
             "statusCode": 500,
             "body": json.dumps({
