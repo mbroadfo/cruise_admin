@@ -6,6 +6,7 @@ def test_patch_user_favorites_success() -> None:
     from app.main import app
     from fastapi.testclient import TestClient
     import os
+    import time
 
     client = TestClient(app)
 
@@ -25,6 +26,9 @@ def test_patch_user_favorites_success() -> None:
 
     print("✅ Patch response:", patch_response.json())
 
+    # Wait a moment for Auth0 changes to propagate
+    time.sleep(2)
+    
     # Now fetch user profile
     from admin.auth0_utils import find_user
     user = find_user(test_email)
