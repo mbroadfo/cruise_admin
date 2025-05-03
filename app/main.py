@@ -117,7 +117,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             **response_headers  # Override with Mangum's headers
         }
 
-        print(f"Final status: {response['statusCode']}, body: {str(response['body'])[:200]}...")
+        print(f"🥚 Final status: {response['statusCode']}, body: {str(response['body'])[:200]}...")
         return response
 
     except Exception as e:
