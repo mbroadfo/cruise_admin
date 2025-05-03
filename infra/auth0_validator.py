@@ -9,7 +9,7 @@ AUTH0_AUDIENCE_PERMISSIONS = {
     "https://cruise-viewer-api": "*"
 }
 JWKS_URL = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
-algorithms = ["RS256"]
+ALGORITHMS = ["RS256"]
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     print("🔍 Incoming event:")
@@ -24,10 +24,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         jwks_client = PyJWKClient(JWKS_URL)
         signing_key = jwks_client.get_signing_key_from_jwt(token)
 
-        decoded = jwt.decode(token, signing_key.key, options={"verify_aud": False}, algorithms=algorithms)
+        decoded = jwt.decode(token, signing_key.key, options={"verify_aud": False}, algorithms=ALGORITHMS)
+
         print("✅ Decoded JWT:")
         print(json.dumps(decoded, indent=2))
 
+        # Manually check audience match
         token_aud = decoded.get("aud")
         if isinstance(token_aud, str):
             token_aud = [token_aud]
@@ -36,34 +38,34 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             raise Exception("Missing audience claim")
 
         print(f"🎯 Token audiences: {token_aud}")
+
         allowed = False
         for aud in token_aud:
             required = AUTH0_AUDIENCE_PERMISSIONS.get(aud)
             print(f"🔍 Checking audience: {aud}, required role: {required}")
-
             if not required:
-                continue
+                continue  # Unknown audience
 
             if required == "*":
                 allowed = True
-                print("✅ Token accepted with wildcard permission")
                 break
             elif required == "admin":
+                # Fix role extraction logic
                 roles_claim = decoded.get("https://cruise-viewer.app/roles")
                 print(f"👥 Found roles claim: {roles_claim}")
                 roles = []
+
                 if isinstance(roles_claim, dict):
                     roles = roles_claim.get("role", [])
                 elif isinstance(roles_claim, list):
                     roles = roles_claim
                 elif isinstance(roles_claim, str):
                     roles = [roles_claim]
-                print(f"🔑 Normalized roles: {roles}")
 
+                print(f"🔑 Normalized roles: {roles}")
                 if "admin" in roles:
-                    allowed = True
                     print("✅ User has admin role")
-                    break
+                    allowed = True
 
         if not allowed:
             raise Exception("User not authorized for this audience")
