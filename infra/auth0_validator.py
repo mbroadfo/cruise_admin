@@ -50,7 +50,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 allowed = True
                 break
             elif required == "admin":
-                # Fix role extraction logic
+                if decoded.get("gty") == "client-credentials":
+                    print("🔓 Token is from client credentials grant, bypassing role check.")
+                    allowed = True
+                    break
+
                 roles_claim = decoded.get("https://cruise-viewer.app/roles")
                 print(f"👥 Found roles claim: {roles_claim}")
                 roles = []
@@ -66,6 +70,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 if "admin" in roles:
                     print("✅ User has admin role")
                     allowed = True
+                    break
 
         if not allowed:
             raise Exception("User not authorized for this audience")
