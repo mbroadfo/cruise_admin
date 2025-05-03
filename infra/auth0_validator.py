@@ -32,6 +32,9 @@ def handler(event, context):
         token_aud = decoded.get("aud")
         if isinstance(token_aud, str):
             token_aud = [token_aud]
+            
+        if not token_aud:
+            raise Exception("Missing audience claim")
 
         allowed = False
         for aud in token_aud:
@@ -39,12 +42,10 @@ def handler(event, context):
             if not required:
                 continue  # Unknown audience
 
-            if required == "*" or required in decoded.get("permissions", []):
+            user_roles = decoded.get("app_metadata", {}).get("roles", [])
+            if required == "*" or required in user_roles:
                 allowed = True
                 break
-
-        if not allowed:
-            raise Exception("User lacks required role or permission for audience")
 
         return {
             "principalId": decoded["sub"],
