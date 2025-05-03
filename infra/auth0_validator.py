@@ -1,6 +1,7 @@
 import json
 import jwt
 from jwt import PyJWKClient
+from typing import Any, Dict
 
 AUTH0_DOMAIN = "dev-jdsnf3lqod8nxlnv.us.auth0.com"
 AUTH0_AUDIENCE_PERMISSIONS = {
@@ -10,7 +11,7 @@ AUTH0_AUDIENCE_PERMISSIONS = {
 JWKS_URL = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
 algorithms = ["RS256"]
 
-def handler(event, context):
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     print("🔍 Incoming event:")
     print(json.dumps(event, indent=2))
 

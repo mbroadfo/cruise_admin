@@ -1,11 +1,12 @@
 import os
+from typing import Optional
 
 def dump_project_files(
     directory: str,
     output_file: str,
-    include_extensions: list[str] = None,
-    include_filenames: list[str] = None,
-    exclude_dirs: list[str] = None
+    include_extensions: Optional[list[str]] = None,
+    include_filenames: Optional[list[str]] = None,
+    exclude_dirs: Optional[list[str]] = None
 ) -> None:
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 

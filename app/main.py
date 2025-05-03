@@ -12,14 +12,15 @@ from typing import Any, Dict, TYPE_CHECKING, Callable
 import json
 import traceback
 from contextlib import asynccontextmanager
-from pydantic import BaseModel, EmailStr
+from typing import AsyncIterator
+
 
 
 if TYPE_CHECKING:
     from typing import Callable
 
 @asynccontextmanager
-async def app_lifespan(app: FastAPI):
+async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
     # This runs on startup
     ensure_env_loaded()
     yield
@@ -54,14 +55,19 @@ async def log_requests(request: Request, call_next: Callable) -> Response:
 async def list_users_api() -> StandardResponse:
     ensure_env_loaded()
     token = get_auth0_mgmt_token()
+    if token is None:
+        raise RuntimeError("❌ Auth0 M2M token is missing")
     users = get_all_users(token)
+
     return StandardResponse(success=True, message="Users listed successfully", data={"users": users})
 
 @app.post("/admin-api/users", response_model=StandardResponse)
 async def invite_user_api(payload: InviteUserRequest) -> StandardResponse:
     ensure_env_loaded()
     token = get_auth0_mgmt_token()
-    user = find_user(payload.email)
+    if token is None:
+        raise RuntimeError("❌ Auth0 M2M token is missing")
+    user = create_user(payload.email, payload.given_name, payload.family_name, token)
 
     if user:
         return StandardResponse(success=True, message="User already exists", data={"user_id": user.get("user_id")})

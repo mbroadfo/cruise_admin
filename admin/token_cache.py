@@ -13,7 +13,7 @@ def get_env_or_raise(name: str) -> str:
         raise RuntimeError(f"{name} is not set in the environment")
     return val
 
-def get_auth0_mgmt_token() -> str:
+def get_auth0_mgmt_token() -> Optional[str]:
     global _auth0_mgmt_token, _auth0_mgmt_token_expiry
 
     now = time.time()

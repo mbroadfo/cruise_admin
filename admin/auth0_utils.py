@@ -7,7 +7,7 @@ from admin.aws_secrets import inject_env_from_secrets
 from admin.token_cache import get_auth0_mgmt_token as get_m2m_token
 
 # Only call secrets injection ONCE, at runtime
-def ensure_env_loaded():
+def ensure_env_loaded() -> None:
     if not os.getenv("AUTH0_DOMAIN"):
         inject_env_from_secrets("cruise-finder-secrets")
 
@@ -83,7 +83,7 @@ def delete_user(user_id: Optional[str]) -> None:
     resp = requests.delete(url, headers=headers)
     resp.raise_for_status()
 
-def get_all_users(token: str) -> List:
+def get_all_users(token: str) -> List[dict]:
     ensure_env_loaded()
     AUTH0_DOMAIN = get_env_or_raise("AUTH0_DOMAIN")
     url = f"https://{AUTH0_DOMAIN}/api/v2/users"

@@ -1,8 +1,7 @@
-def test_patch_user_favorites_success():
+def test_patch_user_favorites_success() -> None:
     from app.main import app
     from fastapi.testclient import TestClient
     import os
-    import json
 
     client = TestClient(app)
 
@@ -25,6 +24,8 @@ def test_patch_user_favorites_success():
     # Now fetch user profile
     from admin.auth0_utils import find_user
     user = find_user(test_email)
+    if user is None:
+        raise RuntimeError(f"User {test_email} not found after patch")
 
     favorites = user.get("app_metadata", {}).get("favorites", [])
     print("📄 Updated favorites:", favorites)

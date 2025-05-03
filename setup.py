@@ -13,7 +13,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "cruise-admin=admin.auth0_cli:cli",
+            "cruise-admin=cruise_admin.admin.auth0_cli:cli",
         ],
     },
     python_requires=">=3.8",

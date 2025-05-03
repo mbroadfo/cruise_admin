@@ -1,5 +1,5 @@
 import click
-from admin.auth0_utils import create_user, send_password_reset_email, get_m2m_token, find_user, list_users, delete_user
+from admin.auth0_utils import create_user, send_password_reset_email, get_m2m_token, find_user, get_all_users, delete_user
 
 @click.group()
 @click.version_option(version="0.1.0", prog_name="portal-admin")
@@ -29,6 +29,9 @@ def invite() -> None:
     
     if user is None:
         token = get_m2m_token()
+        if token is None:
+            raise RuntimeError("❌ Auth0 M2M token is missing")
+
         click.echo("📨 Creating user...")
         user = create_user(email, given_name, family_name, token)
     
@@ -43,7 +46,13 @@ def invite() -> None:
 @cli.command()
 def list() -> None:
     """List all Auth0 users"""
-    list_users()
+    token = get_m2m_token()
+    if token is None:
+        raise RuntimeError("❌ Auth0 M2M token is missing")
+
+    users = get_all_users(token)
+    for user in users:
+        click.echo(f"{user.get('email')} - {user.get('user_id')}")
 
 @cli.command()
 def delete() -> None:
