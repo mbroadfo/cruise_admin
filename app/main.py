@@ -19,10 +19,7 @@ if TYPE_CHECKING:
     from typing import Callable
 
 # Clear any existing handlers
-log_root = logging.getLogger()
-if log_root.handlers:
-    for log_handler in log_root.handlers:
-        log_root.removeHandler(log_handler)
+logger = logging.getLogger("app.main")
 
 # Configure logging
 logging.basicConfig(
@@ -117,12 +114,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Your enhanced handler that properly wraps Mangum"""
     # Initialize logging (keep your existing setup)
     logger.info("🔵 Lambda invocation started")
-    logger.debug(f"Raw event: {json.dumps(event, indent=2)}")
 
     try:
         # Handle OPTIONS requests early
         if event.get("httpMethod") == "OPTIONS":
-            logger.info("Handling OPTIONS preflight")
             return {
                 "statusCode": 200,
                 "body": ""
@@ -145,7 +140,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             **response_headers  # Override with Mangum's headers
         }
 
-        logger.info(f"Final response: {json.dumps(response, indent=2)}")
+        logger.debug(f"Final status: {response['statusCode']}, body: {str(response['body'])[:200]}...")
         return response
 
     except Exception as e:
