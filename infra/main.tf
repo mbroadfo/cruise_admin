@@ -272,6 +272,15 @@ resource "aws_lambda_permission" "allow_apigw_invoke_validator" {
   source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*"
 }
 
+#================================= Lambda Permissions for PATCH =================================================
+resource "aws_lambda_permission" "allow_apigw_patch_favorites" {
+  statement_id  = "AllowAPIGatewayInvokePatchFavorites"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.app.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/PATCH/admin-api/user"
+}
+
 #================================ API GATEWAY - Core API Configuration ==========================================
 # Root API setup including policy controls and base configuration
 #================================================================================================================
@@ -327,6 +336,15 @@ resource "aws_api_gateway_resource" "users" {
   path_part   = "users"
 }
 
+#------------------------------------------
+# API Gateway - user/favorites PATCH route
+#------------------------------------------
+resource "aws_api_gateway_resource" "user_favorites" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_resource.admin_api.id
+  path_part   = "user"
+}
+
 #================================ API GATEWAY - Method Definitions ==============================================
 # HTTP verb implementations with Auth0 JWT authorization requirements
 #================================================================================================================
@@ -371,6 +389,17 @@ resource "aws_api_gateway_method" "delete_method" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.users.id
   http_method   = "DELETE"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id
+}
+
+#------------------------------------------
+# API Gateway - PATCH user favorites method
+#------------------------------------------
+resource "aws_api_gateway_method" "patch_favorites" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.user_favorites.id
+  http_method   = "PATCH"
   authorization = "CUSTOM"
   authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id
 }
@@ -447,6 +476,22 @@ resource "aws_api_gateway_method_response" "delete_response" {
   }
 }
 
+#------------------------------------------
+# API Gateway - PATCH favorites method response
+#------------------------------------------
+resource "aws_api_gateway_method_response" "patch_favorites_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_favorites.id
+  http_method = aws_api_gateway_method.patch_favorites.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Headers" = true
+  }
+}
+
 #================================ API GATEWAY - Integrations ====================================================
 # Lambda proxy connections and MOCK implementations for OPTIONS
 #================================================================================================================
@@ -494,6 +539,18 @@ resource "aws_api_gateway_integration" "delete_integration" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.users.id
   http_method             = aws_api_gateway_method.delete_method.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
+}
+
+#------------------------------------------
+# API Gateway - PATCH favorites integration
+#------------------------------------------
+resource "aws_api_gateway_integration" "patch_favorites_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.user_favorites.id
+  http_method             = aws_api_gateway_method.patch_favorites.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
@@ -573,6 +630,24 @@ resource "aws_api_gateway_integration_response" "delete_integration_response" {
   depends_on = [aws_api_gateway_method_response.delete_response]
 }
 
+#------------------------------------------
+# API Gateway = PATCH favorites Integration Response
+#------------------------------------------
+resource "aws_api_gateway_integration_response" "patch_favorites_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_favorites.id
+  http_method = aws_api_gateway_method.patch_favorites.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'",
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'"
+  }
+
+  depends_on = [aws_api_gateway_method_response.patch_favorites_response]
+}
+
 #================================ API GATEWAY - Authorizer  =====================================================
 # Auth0 token validation service and credential configuration
 #================================================================================================================
@@ -620,6 +695,16 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
   }
 }
 
+#------------------------------------------
+# CloudWatch Log Group for JWT Validtor
+#------------------------------------------
+resource "aws_cloudwatch_log_group" "auth0_validator_logs" {
+  name              = "/aws/lambda/auth0-jwt-validator"
+  retention_in_days = 7
+  lifecycle {
+    prevent_destroy = true
+  }
+}
 #================================= DEPLOYMENT ===================================================================
 # API Gateway stage deployment and logging setup
 #================================================================================================================
@@ -638,7 +723,8 @@ resource "aws_api_gateway_deployment" "deploy" {
       aws_api_gateway_integration.delete_integration.id,
       aws_api_gateway_method.get_users.id,
       aws_api_gateway_method.post_method.id,
-      aws_api_gateway_method.delete_method.id
+      aws_api_gateway_method.delete_method.id,
+      aws_api_gateway_method.patch_favorites.id
     ]))
   }
 

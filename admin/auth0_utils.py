@@ -101,3 +101,34 @@ def get_all_users(token: str) -> List:
         users.extend(batch)
         page += 1
     return users
+
+def update_user_favorites(email: str, favorites: list[str]) -> dict:
+    """
+    Looks up user by email and updates their app_metadata.favorites.
+    """
+    ensure_env_loaded()
+    token = get_m2m_token()
+    AUTH0_DOMAIN = get_env_or_raise("AUTH0_DOMAIN")
+
+    # Step 1: Lookup user by email
+    url_lookup = f"https://{AUTH0_DOMAIN}/api/v2/users?q={email}"
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(url_lookup, headers=headers)
+    resp.raise_for_status()
+    users = resp.json()
+    if not users:
+        raise ValueError(f"User with email {email} not found")
+
+    user_id = users[0]["user_id"]
+
+    # Step 2: PATCH favorites to user
+    url_patch = f"https://{AUTH0_DOMAIN}/api/v2/users/{user_id}"
+    headers["Content-Type"] = "application/json"
+    payload = {
+        "app_metadata": {
+            "favorites": favorites
+        }
+    }
+    patch_resp = requests.patch(url_patch, headers=headers, json=payload)
+    patch_resp.raise_for_status()
+    return patch_resp.json()

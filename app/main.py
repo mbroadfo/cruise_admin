@@ -4,15 +4,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.shutdown import monitor_idle_shutdown, update_last_activity_middleware
 from admin.auth0_utils import get_all_users, create_user, send_password_reset_email, delete_user, find_user
 from admin.token_cache import get_auth0_mgmt_token
-from admin.auth0_utils import ensure_env_loaded
+from admin.auth0_utils import ensure_env_loaded, update_user_favorites
+from app.models import UpdateFavoritesRequest
 import threading
 from mangum import Mangum
 from typing import Any, Dict, TYPE_CHECKING, Callable
 import json
-import logging
-import sys
 import traceback
 from contextlib import asynccontextmanager
+from pydantic import BaseModel, EmailStr
 
 
 if TYPE_CHECKING:
@@ -129,3 +129,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "stacktrace": traceback.format_exc()
             })
         }
+        
+@app.patch("/admin-api/user/favorites", response_model=StandardResponse)
+async def update_user_favorites_api(payload: UpdateFavoritesRequest) -> StandardResponse:
+    try:
+        update_user_favorites(payload.email, payload.favorites)
+        return StandardResponse(success=True, message="Favorites updated")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update favorites: {str(e)}")
