@@ -121,7 +121,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return response
 
     except Exception as e:
-        print.exception(f"💥 Handler crashed: {str(e)}")
+        print(f"💥 Handler crashed: {str(e)}")
         return {
             "statusCode": 500,
             "body": json.dumps({
