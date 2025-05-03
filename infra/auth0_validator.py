@@ -1,17 +1,14 @@
 import json
 import jwt
-import urllib.request
 from jwt import PyJWKClient
-from urllib.error import URLError
 
 AUTH0_DOMAIN = "dev-jdsnf3lqod8nxlnv.us.auth0.com"
 AUTH0_AUDIENCE_PERMISSIONS = {
-    "https://cruise-admin-api": "app_metadata:role:admin",
+    "https://cruise-admin-api": "admin",
     "https://cruise-viewer-api": "*"
 }
 JWKS_URL = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
 algorithms = ["RS256"]
-
 
 def handler(event, context):
     print("🔍 Incoming event:")
@@ -32,7 +29,7 @@ def handler(event, context):
         token_aud = decoded.get("aud")
         if isinstance(token_aud, str):
             token_aud = [token_aud]
-            
+
         if not token_aud:
             raise Exception("Missing audience claim")
 
@@ -42,10 +39,19 @@ def handler(event, context):
             if not required:
                 continue  # Unknown audience
 
-            user_roles = decoded.get("app_metadata", {}).get("roles", [])
-            if required == "*" or required in user_roles:
+            if required == "*":
                 allowed = True
                 break
+            elif required == "admin":
+                roles = decoded.get("https://cruise-viewer.app/roles", {}).get("role", [])
+                if isinstance(roles, str):
+                    roles = [roles]
+                if "admin" in roles:
+                    allowed = True
+                    break
+
+        if not allowed:
+            raise Exception("User not authorized for this audience")
 
         return {
             "principalId": decoded["sub"],
@@ -57,9 +63,8 @@ def handler(event, context):
                     "Resource": event["methodArn"].rsplit("/", 1)[0] + "/*"
                 }]
             },
-            "context": {}, # Optional
+            "context": {},
         }
-
 
     except Exception as e:
         print(f"❌ JWT validation failed: {str(e)}")
