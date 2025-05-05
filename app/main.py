@@ -100,14 +100,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     print(f"🔥 Lambda handler invoked: {event.get('httpMethod')} {event.get('path')}")
 
     try:
-        # Handle OPTIONS requests early
-        if event.get("httpMethod") == "OPTIONS":
-            return {
-                "statusCode": 200,
-                "body": ""
-            }
-
-        # Let Mangum process the main request
+        # Let Mangum process the request (including OPTIONS)
         response = mangum_handler(event, context)
         
         # Ensure response is properly formatted (Mangum should already do this)
