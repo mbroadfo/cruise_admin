@@ -67,13 +67,14 @@ async def invite_user_api(payload: InviteUserRequest) -> StandardResponse:
     token = get_auth0_mgmt_token()
     if token is None:
         raise RuntimeError("❌ Auth0 M2M token is missing")
-    user = create_user(payload.email, payload.given_name, payload.family_name, token)
 
-    if user:
-        return StandardResponse(success=True, message="User already exists", data={"user_id": user.get("user_id")})
+    existing_user = find_user(payload.email)
+    if existing_user:
+        return StandardResponse(success=True, message="User already exists", data={"user_id": existing_user.get("user_id")})
 
     user = create_user(payload.email, payload.given_name, payload.family_name, token)
     send_password_reset_email(payload.email)
+
     return StandardResponse(success=True, message="User invited successfully", data={"user_id": user.get("user_id")})
 
 @app.delete("/admin-api/users", response_model=StandardResponse)

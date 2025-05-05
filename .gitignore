@@ -21,6 +21,7 @@ pip-wheel-metadata/
 .terraform/
 terraform.tfstate
 terraform.tfstate.*
+.terraform.lock.hd
 crash.log
 *.tfplan
 *.tfvars
@@ -42,4 +43,9 @@ desktop.ini
 # Log files
 *.log
 
+# temp files
 output/
+*.zip
+
+# Hidden Files & Directories
+.*
