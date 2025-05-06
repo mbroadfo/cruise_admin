@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi import FastAPI, Request, Response, HTTPException, Query
 from app.models import InviteUserRequest, DeleteUserRequest, StandardResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.shutdown import monitor_idle_shutdown, update_last_activity_middleware
@@ -130,6 +130,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             })
         }
         
+@app.get("/admin-api/user", response_model=StandardResponse)
+async def get_user_favorites(email: str = Query(...)) -> StandardResponse:
+    ensure_env_loaded()
+    user = find_user(email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    favorites = user.get("app_metadata", {}).get("favorites", [])
+    return StandardResponse(success=True, message="Favorites retrieved", data={"user": {"app_metadata": {"favorites": favorites}}})
+
 @app.patch("/admin-api/user/favorites", response_model=StandardResponse)
 async def update_user_favorites_api(payload: UpdateFavoritesRequest) -> StandardResponse:
     try:
