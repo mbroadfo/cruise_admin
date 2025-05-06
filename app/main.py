@@ -57,7 +57,12 @@ async def list_users_api() -> StandardResponse:
     token = get_auth0_mgmt_token()
     if token is None:
         raise RuntimeError("❌ Auth0 M2M token is missing")
+    
     users = get_all_users(token)
+    
+    for user in users:
+        favorites = user.get("app_metadata", {}).get("favorites", [])
+        user["favorites_count"] = len(favorites)
 
     return StandardResponse(success=True, message="Users listed successfully", data={"users": users})
 
