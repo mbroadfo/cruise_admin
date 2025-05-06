@@ -278,7 +278,7 @@ resource "aws_lambda_permission" "allow_apigw_patch_favorites" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.app.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/PATCH/admin-api/user"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/PATCH/admin-api/user/favorites"
 }
 
 #================================ API GATEWAY - Core API Configuration ==========================================
@@ -345,6 +345,21 @@ resource "aws_api_gateway_resource" "user_favorites" {
   path_part   = "user"
 }
 
+#------------------------------------------
+# API Gateway - /admin-api/user/favorites sub-resource
+#------------------------------------------
+resource "aws_api_gateway_resource" "user_favorites_path" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_resource.user_favorites.id
+  path_part   = "favorites"
+}
+
+resource "aws_api_gateway_resource" "user_info" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_resource.user_favorites.id
+  path_part   = "info"
+}
+
 #================================ API GATEWAY - Method Definitions ==============================================
 # HTTP verb implementations with Auth0 JWT authorization requirements
 #================================================================================================================
@@ -398,10 +413,34 @@ resource "aws_api_gateway_method" "delete_method" {
 #------------------------------------------
 resource "aws_api_gateway_method" "patch_favorites" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.user_favorites.id
+  resource_id   = aws_api_gateway_resource.user_favorites_path.id
   http_method   = "PATCH"
   authorization = "CUSTOM"
   authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id
+}
+
+#------------------------------------------
+# API Gateway - OPTIONS user favorites method
+#------------------------------------------
+resource "aws_api_gateway_method" "options_user_favorites" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.user_favorites.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_method" "options_user_favorites_path" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.user_favorites_path.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_method" "options_user_info" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.user_info.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
 }
 
 #================================ API GATEWAY - Method Responses ================================================
@@ -481,7 +520,7 @@ resource "aws_api_gateway_method_response" "delete_response" {
 #------------------------------------------
 resource "aws_api_gateway_method_response" "patch_favorites_response" {
   rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.user_favorites.id
+  resource_id = aws_api_gateway_resource.user_favorites_path.id 
   http_method = aws_api_gateway_method.patch_favorites.http_method
   status_code = "200"
 
@@ -490,6 +529,62 @@ resource "aws_api_gateway_method_response" "patch_favorites_response" {
     "method.response.header.Access-Control-Allow-Methods" = true,
     "method.response.header.Access-Control-Allow-Headers" = true
   }
+}
+
+#------------------------------------------
+# API Gateway - OPTIONS user favorites method response
+#------------------------------------------
+resource "aws_api_gateway_method_response" "options_user_favorites_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_favorites.id
+  http_method = aws_api_gateway_method.options_user_favorites.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_user_favorites_path_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_favorites_path.id
+  http_method = aws_api_gateway_method.options_user_favorites_path.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_user_info_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_info.id
+  http_method = "OPTIONS"
+  status_code = "200"
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+
+  depends_on = [aws_api_gateway_method.options_user_info]
 }
 
 #================================ API GATEWAY - Integrations ====================================================
@@ -511,7 +606,7 @@ resource "aws_api_gateway_integration" "options_integration" {
 #-----------------------------------------------
 #  API Gateway - Lambda Integration
 #-----------------------------------------------
-resource "aws_api_gateway_integration" "lambda_integration" {
+resource "aws_api_gateway_integration" "get_integration" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.users.id
   http_method             = aws_api_gateway_method.get_users.http_method
@@ -549,13 +644,48 @@ resource "aws_api_gateway_integration" "delete_integration" {
 #------------------------------------------
 resource "aws_api_gateway_integration" "patch_favorites_integration" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
-  resource_id             = aws_api_gateway_resource.user_favorites.id
+  resource_id             = aws_api_gateway_resource.user_favorites_path.id
   http_method             = aws_api_gateway_method.patch_favorites.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
 }
 
+#------------------------------------------
+# API Gateway - OPTIONS user favorites integration
+#------------------------------------------
+resource "aws_api_gateway_integration" "options_user_favorites_integration" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_favorites.id
+  http_method = aws_api_gateway_method.options_user_favorites.http_method
+
+  type              = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_integration" "options_user_favorites_path_integration" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_favorites_path.id
+  http_method = aws_api_gateway_method.options_user_favorites_path.http_method
+
+  type              = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_integration" "options_user_info_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.user_info.id
+  http_method             = aws_api_gateway_method.options_user_info.http_method
+  type                    = "MOCK"
+  request_templates       = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+  passthrough_behavior    = "WHEN_NO_MATCH"
+}
 #================================ API GATEWAY - Integration Responses ===========================================
 # Response header transformations and CORS permission mappings
 #================================================================================================================
@@ -635,7 +765,7 @@ resource "aws_api_gateway_integration_response" "delete_integration_response" {
 #------------------------------------------
 resource "aws_api_gateway_integration_response" "patch_favorites_integration_response" {
   rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.user_favorites.id
+  resource_id = aws_api_gateway_resource.user_favorites_path.id
   http_method = aws_api_gateway_method.patch_favorites.http_method
   status_code = "200"
 
@@ -646,6 +776,48 @@ resource "aws_api_gateway_integration_response" "patch_favorites_integration_res
   }
 
   depends_on = [aws_api_gateway_method_response.patch_favorites_response]
+}
+
+#------------------------------------------
+# API Gateway - OPTIONS user favorites integration response
+#------------------------------------------
+resource "aws_api_gateway_integration_response" "options_user_favorites_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_favorites.id
+  http_method = aws_api_gateway_method.options_user_favorites.http_method
+  status_code = aws_api_gateway_method_response.options_user_favorites_response.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'",
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_user_favorites_path_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_favorites_path.id
+  http_method = aws_api_gateway_method.options_user_favorites_path.http_method
+  status_code = aws_api_gateway_method_response.options_user_favorites_path_response.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'",
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_user_info_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_info.id
+  http_method = aws_api_gateway_method.options_user_info.http_method
+  status_code = aws_api_gateway_method_response.options_user_info_response.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
 }
 
 #================================ API GATEWAY - Authorizer  =====================================================
@@ -718,19 +890,38 @@ resource "aws_api_gateway_deployment" "deploy" {
   triggers = {
     redeployment = sha1(jsonencode([
       timestamp(),
-      aws_api_gateway_integration.lambda_integration.id,
+      aws_api_gateway_integration.get_integration.id,
       aws_api_gateway_integration.post_integration.id,
       aws_api_gateway_integration.delete_integration.id,
+      aws_api_gateway_integration.patch_favorites_integration.id,
+      aws_api_gateway_integration.options_integration.id,                    # ✅ ADD THIS
+      aws_api_gateway_integration.options_user_favorites_integration.id,
+      aws_api_gateway_integration.options_user_favorites_path_integration.id, # ✅ ALREADY PRESENT
+
       aws_api_gateway_method.get_users.id,
       aws_api_gateway_method.post_method.id,
       aws_api_gateway_method.delete_method.id,
-      aws_api_gateway_method.patch_favorites.id
+      aws_api_gateway_method.patch_favorites.id,
+      aws_api_gateway_method.options_users.id,                              # ✅ ADD THIS
+      aws_api_gateway_method.options_user_favorites.id,
+      aws_api_gateway_method.options_user_favorites_path.id
     ]))
   }
 
   lifecycle {
     create_before_destroy = true
   }
+
+    depends_on = [
+    aws_api_gateway_integration.get_integration,
+    aws_api_gateway_integration.post_integration,
+    aws_api_gateway_integration.delete_integration,
+    aws_api_gateway_integration.patch_favorites_integration,
+    aws_api_gateway_method.get_users,
+    aws_api_gateway_method.post_method,
+    aws_api_gateway_method.delete_method,
+    aws_api_gateway_method.patch_favorites,
+  ]
 }
 
 #------------------------------------------
