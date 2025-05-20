@@ -766,6 +766,74 @@ resource "aws_api_gateway_integration_response" "delete_integration_response" {
 }
 
 #------------------------------------------
+# API Gateway = Dynamic user_id resource
+#------------------------------------------
+resource "aws_api_gateway_resource" "user_id" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_resource.users.id
+  path_part   = "{user_id}"
+}
+
+
+#------------------------------------------
+# API Gateway = Dynamic OPTIONS for CORS
+#------------------------------------------
+resource "aws_api_gateway_method" "options_user_id" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.user_id.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+#------------------------------------------
+# API Gateway = Dynamic OPTIONS Mock Integration
+#------------------------------------------
+resource "aws_api_gateway_integration" "options_user_id" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_id.id
+  http_method = "OPTIONS"
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_user_id" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_id.id
+  http_method = "OPTIONS"
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+  response_models = {
+    "application/json" = "Empty"
+  }
+  depends_on = [aws_api_gateway_method.options_user_id]
+}
+
+#------------------------------------------
+# API Gateway = Dynamic OPTIONS Integration Response
+#------------------------------------------
+resource "aws_api_gateway_integration_response" "options_user_id" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_id.id
+  http_method = "OPTIONS"
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'",
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+  depends_on = [
+    aws_api_gateway_integration.options_user_id,
+    aws_api_gateway_method_response.options_user_id
+  ]
+}
+
+#------------------------------------------
 # API Gateway = PATCH favorites Integration Response
 #------------------------------------------
 resource "aws_api_gateway_integration_response" "patch_favorites_integration_response" {
