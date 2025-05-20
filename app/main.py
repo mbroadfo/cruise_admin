@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Response, HTTPException, Query
-from app.models import InviteUserRequest, DeleteUserRequest, StandardResponse
+from app.models import InviteUserRequest, StandardResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.shutdown import monitor_idle_shutdown, update_last_activity_middleware
 from admin.auth0_utils import get_all_users, create_user, send_password_reset_email, delete_user, find_user
@@ -82,14 +82,10 @@ async def invite_user_api(payload: InviteUserRequest) -> StandardResponse:
 
     return StandardResponse(success=True, message="User invited successfully", data={"user_id": user.get("user_id")})
 
-@app.delete("/admin-api/users", response_model=StandardResponse)
-async def delete_user_api(payload: DeleteUserRequest) -> StandardResponse:
+@app.delete("/admin-api/users/{user_id}", response_model=StandardResponse)
+async def delete_user_by_id(user_id: str) -> StandardResponse:
     ensure_env_loaded()
-    user = find_user(payload.email)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    delete_user(user.get("user_id"))
+    delete_user(user_id)
     return StandardResponse(success=True, message="User deleted successfully")
 
 # Initialize Mangum FIRST

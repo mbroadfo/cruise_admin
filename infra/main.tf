@@ -798,6 +798,9 @@ resource "aws_api_gateway_integration" "options_user_id" {
   }
 }
 
+#------------------------------------------
+# API Gateway = Dynamic OPTIONS Method Response
+#------------------------------------------
 resource "aws_api_gateway_method_response" "options_user_id" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   resource_id = aws_api_gateway_resource.user_id.id
@@ -822,15 +825,90 @@ resource "aws_api_gateway_integration_response" "options_user_id" {
   resource_id = aws_api_gateway_resource.user_id.id
   http_method = "OPTIONS"
   status_code = "200"
+  selection_pattern = ""
+
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'",
     "method.response.header.Access-Control-Allow-Origin"  = "'*'"
   }
+
   depends_on = [
     aws_api_gateway_integration.options_user_id,
     aws_api_gateway_method_response.options_user_id
   ]
+}
+
+#------------------------------------------
+# API Gateway - DELETE method for /admin-api/users/{user_id}
+#------------------------------------------
+resource "aws_api_gateway_method" "delete_user_id" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.user_id.id
+  http_method   = "DELETE"
+  authorization = "CUSTOM"
+  authorizer_id = aws_api_gateway_authorizer.auth0_lambda_authorizer.id
+}
+
+#------------------------------------------
+# API Gateway - Lambda integration for DELETE /admin-api/users/{user_id}
+#------------------------------------------
+resource "aws_api_gateway_integration" "delete_user_id" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.user_id.id
+  http_method             = aws_api_gateway_method.delete_user_id.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${aws_lambda_function.app.arn}/invocations"
+}
+
+#------------------------------------------
+# API Gateway - Method response for DELETE /admin-api/users/{user_id} (CORS headers)
+#------------------------------------------
+resource "aws_api_gateway_method_response" "delete_user_id_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_id.id
+  http_method = aws_api_gateway_method.delete_user_id.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = true,
+    "method.response.header.Access-Control-Allow-Headers" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true
+  }
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+#------------------------------------------
+# API Gateway - Integration response for DELETE /admin-api/users/{user_id} (CORS headers)
+#------------------------------------------
+resource "aws_api_gateway_integration_response" "delete_user_id_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.user_id.id
+  http_method = aws_api_gateway_method.delete_user_id.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'",
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'"
+  }
+
+  depends_on = [aws_api_gateway_method_response.delete_user_id_response]
+}
+
+#------------------------------------------
+# Lambda - Permission to allow API Gateway to DELETE /admin-api/users/{user_id}
+#------------------------------------------
+resource "aws_lambda_permission" "allow_apigw_delete_user_id" {
+  statement_id  = "AllowAPIGatewayInvokeDeleteUserId"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.app.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/DELETE/admin-api/users/*"
 }
 
 #------------------------------------------
@@ -973,6 +1051,7 @@ resource "aws_api_gateway_deployment" "deploy" {
       aws_api_gateway_integration.options_user_favorites_integration.id,
       aws_api_gateway_integration.options_user_favorites_path_integration.id,
       aws_api_gateway_integration.get_user_integration.id,
+      aws_api_gateway_integration.delete_user_id.id,
 
       aws_api_gateway_method.get_users.id,
       aws_api_gateway_method.post_method.id,
@@ -981,7 +1060,8 @@ resource "aws_api_gateway_deployment" "deploy" {
       aws_api_gateway_method.options_users.id,
       aws_api_gateway_method.options_user_favorites.id,
       aws_api_gateway_method.options_user_favorites_path.id,
-      aws_api_gateway_method.get_user.id
+      aws_api_gateway_method.get_user.id,
+      aws_api_gateway_integration.delete_user_id
     ]))
   }
 
