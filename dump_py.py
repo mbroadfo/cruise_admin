@@ -6,7 +6,8 @@ def dump_project_files(
     output_file: str,
     include_extensions: Optional[list[str]] = None,
     include_filenames: Optional[list[str]] = None,
-    exclude_dirs: Optional[list[str]] = None
+    exclude_dirs: Optional[list[str]] = None,
+    exclude_files: Optional[list[str]] = None
 ) -> None:
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
@@ -14,15 +15,18 @@ def dump_project_files(
         os.remove(output_file)
 
     if include_extensions is None:
-        include_extensions = ['.py', '.json', '.js', '.ts', '.jsx', '.tsx', '.html', '.css', '.sh']
+        include_extensions = ['.py', '.json', '.js', '.ts', '.jsx', '.tsx', '.html', '.css', '.sh', '.tf']
     if include_filenames is None:
         include_filenames = ['Dockerfile', 'Makefile']
     if exclude_dirs is None:
-        exclude_dirs = ['venv', '.mypy_cache', os.path.join('infra', 'build')]
+        exclude_dirs = ['.mypy_cache', 'venv', '.terraform', 'infra/build', 'infra\\build']
+    if exclude_files is None:
+        exclude_files = ['terraform.tfstate', 'terraform.tfstate.backup', '.terraform.lock.hcl']
 
     with open(output_file, 'w', encoding='utf-8') as outfile:
         for root, dirs, files in os.walk(directory):
-            dirs[:] = [d for d in dirs if os.path.join(root, d) not in [os.path.join(directory, x) for x in exclude_dirs]]
+            # Skip any directory containing excluded folders in its path
+            dirs[:] = [d for d in dirs if not any(ex in os.path.join(root, d) for ex in exclude_dirs)]
 
             for file in files:
                 file_path = os.path.join(root, file)
@@ -30,6 +34,8 @@ def dump_project_files(
 
                 if (
                     (ext in include_extensions or file in include_filenames)
+                    and not any(file.endswith(ef) for ef in exclude_files)
+                    and not any(ex in file_path for ex in exclude_dirs)
                     and not file_path.startswith(os.path.dirname(output_file))
                 ):
                     outfile.write(f"# File: {file_path}\n\n")
