@@ -1006,7 +1006,7 @@ resource "aws_api_gateway_account" "this" {
 #------------------------------------------
 resource "aws_cloudwatch_log_group" "api_gw_logs" {
   name              = "/aws/apigateway/${var.app_name}-access"
-  retention_in_days = 7
+  retention_in_days = 1
 }
 
 #------------------------------------------
@@ -1014,7 +1014,7 @@ resource "aws_cloudwatch_log_group" "api_gw_logs" {
 #------------------------------------------
 resource "aws_cloudwatch_log_group" "lambda_logs" {
   name              = "/aws/lambda/${var.app_name}"
-  retention_in_days = 7
+  retention_in_days = 3
   lifecycle {
     prevent_destroy = true
   }
@@ -1025,7 +1025,7 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 #------------------------------------------
 resource "aws_cloudwatch_log_group" "auth0_validator_logs" {
   name              = "/aws/lambda/auth0-jwt-validator"
-  retention_in_days = 7
+  retention_in_days = 1
   lifecycle {
     prevent_destroy = true
   }
