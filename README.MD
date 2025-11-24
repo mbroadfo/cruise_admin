@@ -10,7 +10,7 @@ This is the admin API for managing users and favorites for the Cruise Viewer pla
 * **Auth0 Integration** for user management and metadata
 * **Favorites Management** for expeditions
 * **Idle-aware Lambda**: Automatically tracks last user activity
-* **Secrets Manager Integration** for secure config injection
+* **Parameter Store Integration** for secure config injection
 * **Click-based CLI Tool** for local user management
 * **Complete Terraform Infrastructure**: API Gateway, Lambda, IAM, Auth0 settings
 * **CORS and Preflight Support** for SPA compatibility
@@ -24,7 +24,7 @@ cruise-admin/
 ├── src/
 │   ├── api.py               # FastAPI routes
 │   ├── auth.py              # JWT verification, Auth0 role parsing
-│   ├── config.py            # Env + AWS Secrets manager integration
+│   ├── config.py            # Env + AWS Parameter Store integration
 │   ├── lambda_handler.py    # Mangum bridge and CloudWatch logging
 │   ├── token_cache.py       # Cached Auth0 Management API token logic
 │   ├── auth0_utils.py       # Create/find/update/delete Auth0 users
@@ -67,7 +67,7 @@ This app is containerized using Docker and deployed to AWS Lambda as a container
 2. Terraform applies infrastructure (`terraform/` directory)
 3. Lambda is updated with latest image tag
 
-Environment configuration and Auth0 secrets are stored in **AWS Secrets Manager** and injected at runtime using the custom `inject_env_from_secrets` logic.
+Environment configuration and Auth0 secrets are stored in **AWS Systems Manager Parameter Store** and injected at runtime using the custom `inject_env_from_secrets` logic.
 
 ---
 
@@ -75,9 +75,9 @@ Environment configuration and Auth0 secrets are stored in **AWS Secrets Manager*
 
 * **Lambda Function**: Container-based, idle-aware
 * **API Gateway**: JWT-secured, CORS-enabled, with dynamic routes
-* **IAM Roles**: Least-privilege setup with read access to Secrets Manager
+* **IAM Roles**: Least-privilege setup with read access to Parameter Store
 * **CloudWatch**: Basic logging + last activity timestamp
-* **Auth0 Integration**: Domain, client, audience, secret configured via secrets
+* **Auth0 Integration**: Domain, client, audience, secret configured via Parameter Store
 
 ---
 

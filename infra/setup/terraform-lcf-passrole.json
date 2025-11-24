@@ -1,0 +1,15 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "PassRoleForCruiseAdmin",
+            "Effect": "Allow",
+            "Action": "iam:PassRole",
+            "Resource": [
+                "arn:aws:iam::491696534851:role/cruise-admin-api-lambda-exec",
+                "arn:aws:iam::491696534851:role/lambda-jwt-auth-role",
+                "arn:aws:iam::491696534851:role/cruise-admin-api-apigw-cloudwatch-role"
+            ]
+        }
+    ]
+}

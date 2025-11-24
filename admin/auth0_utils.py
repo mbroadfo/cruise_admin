@@ -9,7 +9,7 @@ from admin.token_cache import get_auth0_mgmt_token as get_m2m_token
 # Only call secrets injection ONCE, at runtime
 def ensure_env_loaded() -> None:
     if not os.getenv("AUTH0_DOMAIN"):
-        inject_env_from_secrets("cruise-finder-secrets")
+        inject_env_from_secrets()
 
 def get_env_or_raise(name: str) -> str:
     val = os.getenv(name)
