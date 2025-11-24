@@ -1,7 +1,5 @@
 fastapi
-uvicorn
 requests
-boto3
 python-multipart
 pydantic[email]
 email-validator

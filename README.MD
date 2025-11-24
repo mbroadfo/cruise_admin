@@ -19,7 +19,7 @@ This is the admin API for managing users and favorites for the Cruise Viewer pla
 
 ## Project Structure
 
-```
+``` text
 cruise-admin/
 ├── src/
 │   ├── api.py               # FastAPI routes

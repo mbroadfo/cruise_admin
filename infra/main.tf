@@ -74,18 +74,47 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
 }
 
 #------------------------------------------
-# IAM Policy - Lambda secrets access
+# IAM Policy - Lambda secrets access (dual-mode: Secrets Manager + Parameter Store)
 #------------------------------------------
 resource "aws_iam_policy" "lambda_secrets_access" {
   name        = "${var.app_name}-secrets-access"
-  description = "Allow Lambda to access secrets"
+  description = "Allow Lambda to access secrets from Secrets Manager and Parameter Store"
   policy = jsonencode({
     Version = "2012-10-17",
-    Statement = [{
-      Effect   = "Allow",
-      Action   = ["secretsmanager:GetSecretValue"],
-      Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:cruise-finder-secrets*"
-    }]
+    Statement = [
+      {
+        Sid      = "SecretsManagerAccess"
+        Effect   = "Allow",
+        Action   = ["secretsmanager:GetSecretValue"],
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:cruise-finder-secrets*"
+      },
+      {
+        Sid    = "ParameterStoreReadCredentials"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters"
+        ]
+        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/cruise-admin/prod/*"
+      },
+      {
+        Sid    = "KMSDecryptParameters"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "secretsmanager.${var.aws_region}.amazonaws.com",
+              "ssm.${var.aws_region}.amazonaws.com"
+            ]
+          }
+        }
+      }
+    ]
   })
 }
 
@@ -707,7 +736,7 @@ resource "aws_api_gateway_integration_response" "options_integration_response" {
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'Authorization,Content-Type'",
     "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,GET,POST,DELETE'",
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://da389rkfiajdk.cloudfront.net'"
   }
 }
 
@@ -721,7 +750,7 @@ resource "aws_api_gateway_integration_response" "get_integration_response" {
   status_code = "200"
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://da389rkfiajdk.cloudfront.net'"
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS'"
   }
@@ -739,7 +768,7 @@ resource "aws_api_gateway_integration_response" "post_integration_response" {
   status_code = "200"
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://da389rkfiajdk.cloudfront.net'"
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS'"
   }
@@ -757,7 +786,7 @@ resource "aws_api_gateway_integration_response" "delete_integration_response" {
   status_code = "200"
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://da389rkfiajdk.cloudfront.net'"
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS'"
   }
@@ -830,7 +859,7 @@ resource "aws_api_gateway_integration_response" "options_user_id" {
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'",
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://da389rkfiajdk.cloudfront.net'"
   }
 
   depends_on = [
@@ -892,7 +921,7 @@ resource "aws_api_gateway_integration_response" "delete_user_id_integration_resp
   status_code = "200"
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'",
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://da389rkfiajdk.cloudfront.net'",
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'"
   }
@@ -921,7 +950,7 @@ resource "aws_api_gateway_integration_response" "patch_favorites_integration_res
   status_code = "200"
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'",
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://da389rkfiajdk.cloudfront.net'",
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'"
   }
@@ -941,7 +970,7 @@ resource "aws_api_gateway_integration_response" "options_user_favorites_integrat
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'",
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://da389rkfiajdk.cloudfront.net'"
   }
 }
 
@@ -954,7 +983,7 @@ resource "aws_api_gateway_integration_response" "options_user_favorites_path_int
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,DELETE,OPTIONS,PATCH'",
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://da389rkfiajdk.cloudfront.net'"
   }
 }
 
@@ -965,7 +994,7 @@ resource "aws_api_gateway_integration_response" "get_user_integration_response" 
   status_code = "200"
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'",
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://da389rkfiajdk.cloudfront.net'",
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'",
     "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
   }
