@@ -24,6 +24,7 @@ terraform.tfstate.*
 .terraform.lock.hd
 crash.log
 *.tfplan
+tfplan
 *.tfvars
 
 # AWS credentials (just in case)

@@ -1,12 +1,11 @@
 import os
 from admin.aws_secrets import inject_env_from_secrets
 
-# Load secrets only ONCE, lazily
-SECRET_NAME = os.getenv("AWS_SECRET_NAME", "cruise-finder-secrets")
+# Load Auth0 credentials from Parameter Store
 REGION_NAME = os.getenv("AWS_REGION", "us-west-2")
 
 # Inject secrets into environment
-inject_env_from_secrets(SECRET_NAME, REGION_NAME)
+inject_env_from_secrets(region_name=REGION_NAME)
 
 # Now you can safely grab them
 AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")

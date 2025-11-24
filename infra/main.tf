@@ -74,20 +74,14 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
 }
 
 #------------------------------------------
-# IAM Policy - Lambda secrets access (dual-mode: Secrets Manager + Parameter Store)
+# IAM Policy - Lambda Parameter Store access
 #------------------------------------------
 resource "aws_iam_policy" "lambda_secrets_access" {
   name        = "${var.app_name}-secrets-access"
-  description = "Allow Lambda to access secrets from Secrets Manager and Parameter Store"
+  description = "Allow Lambda to access Auth0 credentials from Parameter Store"
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      {
-        Sid      = "SecretsManagerAccess"
-        Effect   = "Allow",
-        Action   = ["secretsmanager:GetSecretValue"],
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:cruise-finder-secrets*"
-      },
       {
         Sid    = "ParameterStoreReadCredentials"
         Effect = "Allow"
@@ -107,10 +101,7 @@ resource "aws_iam_policy" "lambda_secrets_access" {
         Resource = "*"
         Condition = {
           StringEquals = {
-            "kms:ViaService" = [
-              "secretsmanager.${var.aws_region}.amazonaws.com",
-              "ssm.${var.aws_region}.amazonaws.com"
-            ]
+            "kms:ViaService" = "ssm.${var.aws_region}.amazonaws.com"
           }
         }
       }
