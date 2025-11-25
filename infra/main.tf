@@ -78,7 +78,7 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
 #------------------------------------------
 resource "aws_iam_policy" "lambda_secrets_access" {
   name        = "${var.app_name}-secrets-access"
-  description = "Allow Lambda to access Auth0 credentials from Parameter Store"
+  description = "Allow Lambda to access Auth0 credentials and cache tokens in Parameter Store"
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -90,6 +90,14 @@ resource "aws_iam_policy" "lambda_secrets_access" {
           "ssm:GetParameters"
         ]
         Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/cruise-admin/prod/*"
+      },
+      {
+        Sid    = "ParameterStoreWriteTokenCache"
+        Effect = "Allow"
+        Action = [
+          "ssm:PutParameter"
+        ]
+        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/cruise-admin/prod/auth0-mgmt-token"
       },
       {
         Sid    = "KMSDecryptParameters"
