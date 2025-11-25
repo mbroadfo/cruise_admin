@@ -21,25 +21,28 @@ This is the admin API for managing users and favorites for the Cruise Viewer pla
 
 ``` text
 cruise-admin/
-├── src/
-│   ├── api.py               # FastAPI routes
-│   ├── auth.py              # JWT verification, Auth0 role parsing
+├── app/
+│   ├── main.py              # FastAPI routes and Mangum handler
 │   ├── config.py            # Env + AWS Parameter Store integration
-│   ├── lambda_handler.py    # Mangum bridge and CloudWatch logging
-│   ├── token_cache.py       # Cached Auth0 Management API token logic
-│   ├── auth0_utils.py       # Create/find/update/delete Auth0 users
-│   └── middleware.py        # Last activity timestamp tracking
+│   ├── models.py            # Pydantic models
+│   └── shutdown.py          # Idle-aware shutdown tracking
 │
-├── cli/
-│   └── auth0_cli.py         # Click CLI for managing users
+├── admin/
+│   ├── auth0_cli.py         # Click CLI for managing users
+│   ├── auth0_utils.py       # Create/find/update/delete Auth0 users
+│   ├── aws_secrets.py       # Parameter Store credential injection
+│   ├── parameter_store.py   # Parameter Store utilities
+│   └── token_cache.py       # Three-tier Auth0 token caching
 │
 ├── tests/
-│   └── test_update_favorites.py  # Sample test case
+│   └── test_*.py            # Test suite
 │
-├── Dockerfile              # Lambda-compatible container
-├── Makefile                # Build/deploy shortcuts
-├── terraform/              # Full AWS + Auth0 setup
-└── requirements.txt        # Python dependencies
+├── infra/
+│   └── main.tf              # Terraform infrastructure
+│
+├── Dockerfile               # Lambda-compatible container
+├── deploy_lambda.ps1        # Manual deployment script
+└── requirements.txt         # Python dependencies
 ```
 
 ---
@@ -59,25 +62,29 @@ cruise-admin/
 
 ---
 
-## Deployment & CI/CD
+## Deployment
 
-This app is containerized using Docker and deployed to AWS Lambda as a container image. CI/CD steps:
+This app is containerized using Docker and deployed to AWS Lambda as a container image.
 
-1. GitHub Actions builds image and pushes to ECR
-2. Terraform applies infrastructure (`terraform/` directory)
-3. Lambda is updated with latest image tag
+**Manual Deployment Process**:
 
-Environment configuration and Auth0 secrets are stored in **AWS Systems Manager Parameter Store** and injected at runtime using the custom `inject_env_from_secrets` logic.
+1. Run `deploy_lambda.ps1` to build and push Docker image to ECR
+2. Update Lambda function with new image URI (or use Terraform)
+3. Apply infrastructure changes with Terraform if needed (`infra/` directory)
+
+Environment configuration and Auth0 credentials are stored in **AWS Systems Manager Parameter Store** (`/cruise-admin/prod/auth0-credentials`) and injected at runtime. Auth0 Management API tokens are cached using a three-tier system (memory → Parameter Store → Auth0 API) for optimal performance.
 
 ---
 
 ## Terraform Infrastructure
 
-* **Lambda Function**: Container-based, idle-aware
+All infrastructure is defined in `infra/main.tf`:
+
+* **Lambda Function**: Container-based, idle-aware, with Parameter Store access
 * **API Gateway**: JWT-secured, CORS-enabled, with dynamic routes
-* **IAM Roles**: Least-privilege setup with read access to Parameter Store
+* **IAM Roles**: Least-privilege setup with read/write access to Parameter Store
 * **CloudWatch**: Basic logging + last activity timestamp
-* **Auth0 Integration**: Domain, client, audience, secret configured via Parameter Store
+* **Auth0 Integration**: Credentials configured via Parameter Store
 
 ---
 
@@ -94,10 +101,10 @@ Environment configuration and Auth0 secrets are stored in **AWS Systems Manager 
 
 ```bash
 # Build container for local testing
-make build
+docker build --platform linux/amd64 -t cruise-admin-api:local .
 
-# Run CLI to create/delete/test users
-python cli/auth0_cli.py list-users
+# Run CLI to manage users (requires AWS credentials and Parameter Store access)
+python admin/auth0_cli.py list-users
 ```
 
 ---
