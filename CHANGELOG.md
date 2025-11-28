@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2025-11-28
+
+### 🚀 ZIP-Based Lambda Deployment
+
+Migrated from Docker container deployment to ZIP-based Lambda packages, eliminating ECR costs and simplifying CI/CD.
+
+### Added
+
+- **ZIP deployment pipeline**
+  - `build_lambda.py` - Docker-based build script using Lambda Python 3.11 image
+  - Ensures Lambda-compatible binaries for all dependencies
+  - Includes package metadata (.dist-info) for proper imports
+  - 3.73 MB deployment package (well under 50 MB limit)
+
+- **GitHub Actions CI/CD workflow** (`.github/workflows/deploy.yml`)
+  - Automated build and deployment on push to main
+  - Python 3.11 setup with pip caching
+  - Lambda function update with version publishing
+  - Deployment verification and artifact upload
+
+### Changed
+
+- **Updated `deploy_lambda.ps1`** - PowerShell script for ZIP deployment
+  - Replaced Docker build/push with ZIP package creation
+  - Automatic upload to Lambda
+  - Deployment verification with function info display
+
+- **Updated `infra/main.tf`** - Terraform configuration
+  - Changed Lambda `package_type` from `Image` to `Zip`
+  - Added `runtime = "python3.11"` and `handler = "app.main.lambda_handler"`
+  - Removed ECR repository and policy resources
+  - Updated local paths to use `deployment.zip`
+
+- **Updated README.MD** - Documentation for ZIP deployment
+  - CI/CD workflow documentation
+  - Manual deployment instructions
+  - GitHub secrets requirements
+  - Removed Docker build references
+
+- **Updated `.gitignore`** - Exclude deployment artifacts
+  - Added `deployment.zip` and `package/` directory
+
+### Removed
+
+- **ECR (Elastic Container Registry) dependency**
+  - No more Docker image storage costs (~$0.10/GB/month)
+  - No ECR login or push commands needed
+  - Simplified deployment pipeline
+
+### Performance
+
+- **Faster deployments** - No Docker build/push overhead
+- **Simpler CI/CD** - Just zip and upload to Lambda
+- **Maintained performance** - Same cold start times, token caching still operational
+
+### Infrastructure
+
+- Deployment package: 3.73 MB
+- Lambda runtime: Python 3.11
+- Package type: Zip
+- Build environment: Docker (Lambda Python 3.11 image)
+
 ## [2.0.0] - 2025-11-24
 
 ### 🎉 Major Release - Parameter Store Migration & Token Caching Complete
