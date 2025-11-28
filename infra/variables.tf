@@ -10,18 +10,6 @@ variable "app_name" {
   default     = "cruise-admin-api"
 }
 
-variable "ecr_repo_name" {
-  description = "ECR Repository name"
-  type        = string
-  default     = "cruise-admin-api"
-}
-
-variable "image_tag" {
-  description = "Image tag to deploy"
-  type        = string
-  default     = "latest"
-}
-
 variable "auth0_domain" {
   description = "Auth0 Domain (without https://)"
   type        = string
