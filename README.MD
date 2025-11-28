@@ -64,13 +64,41 @@ cruise-admin/
 
 ## Deployment
 
-This app is containerized using Docker and deployed to AWS Lambda as a container image.
+This app is deployed to AWS Lambda as a **ZIP package** (no Docker/ECR costs!).
 
-**Manual Deployment Process**:
+### CI/CD (Automated)
 
-1. Run `deploy_lambda.ps1` to build and push Docker image to ECR
-2. Update Lambda function with new image URI (or use Terraform)
-3. Apply infrastructure changes with Terraform if needed (`infra/` directory)
+Push to `main` branch triggers GitHub Actions workflow:
+
+1. Builds deployment package using `build_lambda.py`
+2. Uploads to Lambda function
+3. Publishes new version
+
+**GitHub Secrets Required**:
+
+* `AWS_ACCESS_KEY_ID` - IAM user with Lambda update permissions
+* `AWS_SECRET_ACCESS_KEY` - Corresponding secret key
+
+### Manual Deployment
+
+```bash
+# Build deployment package
+python build_lambda.py
+
+# Deploy to Lambda
+aws lambda update-function-code \
+  --function-name cruise-admin-api \
+  --zip-file fileb://deployment.zip \
+  --region us-west-2
+```
+
+### Infrastructure (Terraform)
+
+```bash
+cd infra
+terraform init
+terraform apply
+```
 
 Environment configuration and Auth0 credentials are stored in **AWS Systems Manager Parameter Store** (`/cruise-admin/prod/auth0-credentials`) and injected at runtime. Auth0 Management API tokens are cached using a three-tier system (memory → Parameter Store → Auth0 API) for optimal performance.
 
@@ -100,11 +128,14 @@ All infrastructure is defined in `infra/main.tf`:
 ## Running Locally
 
 ```bash
-# Build container for local testing
-docker build --platform linux/amd64 -t cruise-admin-api:local .
+# Install dependencies
+pip install -r requirements.txt
 
 # Run CLI to manage users (requires AWS credentials and Parameter Store access)
 python admin/auth0_cli.py list-users
+
+# Build deployment package for testing
+python build_lambda.py
 ```
 
 ---

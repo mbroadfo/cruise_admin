@@ -46,7 +46,10 @@ desktop.ini
 
 # temp files
 output/
-*.zip
+
+# Lambda deployment artifacts
+deployment.zip
+package/
 
 # Hidden Files & Directories
 .*

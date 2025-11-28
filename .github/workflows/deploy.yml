@@ -1,41 +1,90 @@
-name: Deploy Lambda
+name: Deploy Lambda Function
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+  workflow_dispatch: # Allow manual triggers
+
+env:
+  AWS_REGION: us-west-2
+  LAMBDA_FUNCTION_NAME: cruise-admin-api
 
 jobs:
   deploy:
+    name: Build and Deploy Lambda
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up Python (for packaging, if needed)
-        uses: actions/setup-python@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build deployment package
+        run: |
+          python build_lambda.py
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Log in to Amazon ECR
-        run: |
-          aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 491696534851.dkr.ecr.us-west-2.amazonaws.com
-      
-      - name: Build and push Docker image
-        run: |
-          docker build --platform linux/amd64 -t cruise-admin-api:latest .
-          docker tag cruise-admin-api:latest 491696534851.dkr.ecr.us-west-2.amazonaws.com/cruise-admin-api:latest
-          docker push 491696534851.dkr.ecr.us-west-2.amazonaws.com/cruise-admin-api:latest
-
-      - name: Redeploy Lambda with latest image
+      - name: Deploy to Lambda
         run: |
           aws lambda update-function-code \
-            --function-name cruise-admin-api \
-            --image-uri 491696534851.dkr.ecr.us-west-2.amazonaws.com/cruise-admin-api:latest
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --zip-file fileb://deployment.zip \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "⏳ Waiting for function update to complete..."
+          aws lambda wait function-updated \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "✅ Lambda function updated successfully!"
+
+      - name: Publish new version
+        run: |
+          VERSION=$(aws lambda publish-version \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Version' \
+            --output text)
+          
+          echo "🚀 Published Lambda version: $VERSION"
+          echo "LAMBDA_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Verify deployment
+        run: |
+          CONFIG=$(aws lambda get-function-configuration \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }})
+          
+          echo "📊 Function Configuration:"
+          echo "$CONFIG" | jq '{
+            FunctionName: .FunctionName,
+            Runtime: .Runtime,
+            Handler: .Handler,
+            CodeSize: .CodeSize,
+            LastModified: .LastModified,
+            Version: .Version
+          }'
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-deployment-package
+          path: deployment.zip
+          retention-days: 7

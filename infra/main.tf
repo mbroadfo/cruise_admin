@@ -12,39 +12,14 @@ data "aws_region" "current" {}
 # Locals
 #------------------------------------------
 locals {
-  image_uri = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/${var.ecr_repo_name}:${var.image_tag}"
+  # Deployment package path (relative to infra/ directory)
+  deployment_package = "${path.module}/../deployment.zip"
 }
 
-#===================================== ECR ======================================================================
-# Docker image repository for Lambda container images
+#===================================== DEPLOYMENT PACKAGE =======================================================
+# Lambda deployment package (ZIP format)
+# Build using: python build_lambda.py
 #================================================================================================================
-
-#------------------------------------------
-# ECR Repository
-#------------------------------------------
-resource "aws_ecr_repository" "repo" {
-  name = var.ecr_repo_name
-}
-
-#------------------------------------------
-# ECR Repository policy
-#------------------------------------------
-resource "aws_ecr_repository_policy" "repo_policy" {
-  repository = aws_ecr_repository.repo.name
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Sid       = "AllowLambdaPull",
-      Effect    = "Allow",
-      Principal = { Service = "lambda.amazonaws.com" },
-      Action    = [
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage",
-        "ecr:BatchCheckLayerAvailability"
-      ]
-    }]
-  })
-}
 
 #======================================== IAM ===================================================================
 # AWS Identity & Access Management roles and policies
@@ -211,21 +186,18 @@ resource "aws_iam_role_policy" "apigateway_cloudwatch_role_policy" {
 # Lambda Function
 #------------------------------------------
 resource "aws_lambda_function" "app" {
-  function_name = var.app_name
-  package_type  = "Image"
-  image_uri     = local.image_uri
-  role          = aws_iam_role.lambda_exec.arn
-  timeout       = 30
-  memory_size   = 512
+  function_name    = var.app_name
+  runtime          = "python3.11"
+  handler          = "app.main.lambda_handler"
+  role             = aws_iam_role.lambda_exec.arn
+  timeout          = 30
+  memory_size      = 512
+  filename         = local.deployment_package
+  source_code_hash = filebase64sha256(local.deployment_package)
 
-  image_config {
-    command = ["app.main.lambda_handler"]  # 👈 Custom handler
-  }
   lifecycle {
-    ignore_changes = [image_uri]  # Prevent Terraform from overwriting during CI/CD
+    ignore_changes = [source_code_hash]  # Prevent Terraform from overwriting during CI/CD
   }
-
-  depends_on = [aws_ecr_repository.repo, aws_ecr_repository_policy.repo_policy]
 }
 
 #------------------------------------------
